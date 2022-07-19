@@ -132,3 +132,20 @@ int get_stream_number(AVFormatContext* fmt_ctx, enum AVMediaType type)
 
     return -1;
 }
+
+AVFrame* copy_frame(AVFrame* src)
+{
+    AVFrame* dest = av_frame_alloc();
+    dest->format = src->format;
+    dest->width = src->width;
+    dest->height = src->height;
+    dest->channels = src->channels;
+    dest->channel_layout = src->channel_layout;
+    dest->nb_samples = src->nb_samples;
+    dest->sample_rate = src->sample_rate;
+    av_frame_get_buffer(dest, 0);
+    av_frame_make_writable(dest);
+    av_frame_copy(dest, src);
+    av_frame_copy_props(dest, src);
+    return dest;
+}

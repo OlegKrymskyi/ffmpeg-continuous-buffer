@@ -23,3 +23,5 @@ int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
     AVStream* st, AVFrame* frame, AVPacket* pkt);
 
 int get_stream_number(AVFormatContext* fmt_ctx, enum AVMediaType type);
+
+AVFrame* copy_frame(AVFrame* src);

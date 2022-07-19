@@ -10,7 +10,7 @@ ContinuousBufferVideo* cb_allocate_video_buffer(AVRational time_base, enum AVCod
     buffer->time_base = time_base;
     buffer->bit_rate = bit_rate;
 
-    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration, sizeof(AVFrame*));
+    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration, sizeof(AVFrame));
     return buffer;
 }
 
@@ -24,7 +24,7 @@ ContinuousBufferAudio* cb_allocate_audio_buffer(AVRational time_base, enum AVCod
     buffer->time_base = time_base;
     buffer->sample_fmt = sample_fmt;
 
-    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration, sizeof(AVFrame*));
+    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration, sizeof(AVFrame));
 
     return buffer;
 }
@@ -108,14 +108,17 @@ int cb_push_frame(ContinuousBuffer* buffer, AVFrame* frame, enum AVMediaType typ
 
 int cb_push_frame_to_queue(AVFifoBuffer* queue, AVFrame* frame)
 {
-    if (av_fifo_space(queue) <= 0)
+    int space = av_fifo_space(queue);
+    int size = av_fifo_size(queue);
+    while (av_fifo_space(queue) <= 0)
     {
-        AVFrame* removedFrame = av_frame_alloc();
-        av_fifo_generic_read(queue, frame, sizeof(frame), NULL);
+        AVFrame* removedFrame = av_mallocz(sizeof(AVFrame));
+        av_fifo_generic_read(queue, removedFrame, sizeof(AVFrame), NULL);
         av_frame_free(&removedFrame);
     }
 
-    return av_fifo_generic_write(queue, frame, sizeof(frame), NULL);
+    AVFrame* cloneFrame = copy_frame(frame);
+    return av_fifo_generic_write(queue, cloneFrame, sizeof(AVFrame), NULL);
 }
 
 int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* format)
@@ -199,12 +202,12 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
 int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecContext* encoder)
 {
     AVPacket* pkt = av_packet_alloc();
-    int64_t frameCount = (av_fifo_size(queue) - av_fifo_space(queue)) / sizeof(AVFrame*);
+    int64_t frameCount = av_fifo_size(queue) / sizeof(AVFrame);
     int stNum = get_stream_number(outputFormat, encoder->codec_type);
     for (int i = 0; i < frameCount; i++)
     {
-        AVFrame* frame = av_mallocz(sizeof(AVFrame*));
-        av_fifo_generic_read(queue, frame, sizeof(AVFrame*), NULL);
+        AVFrame* frame = av_mallocz(sizeof(AVFrame));
+        av_fifo_generic_read(queue, frame, sizeof(AVFrame), NULL);
         
         write_frame(outputFormat, encoder, outputFormat->streams[stNum], frame, pkt);
 
