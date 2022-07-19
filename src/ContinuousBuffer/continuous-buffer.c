@@ -141,11 +141,11 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
 
     /* Add the audio and video streams using the default format codecs
      * and initialize the codecs. */
-    if (fmt->video_codec != AV_CODEC_ID_NONE && buffer->video != NULL) {
-        cb_add_video_stream(buffer, fmt, &videoCodec, &videoCodecCtx);
+    if (buffer->video != NULL) {
+        cb_add_video_stream(buffer, outputFormat, &videoCodec, &videoCodecCtx);
     }
-    if (fmt->audio_codec != AV_CODEC_ID_NONE && buffer->audio != NULL) {
-        cb_add_audio_stream(buffer, fmt, &audioCodec, &audioCodecCtx);
+    if (buffer->audio != NULL) {
+        cb_add_audio_stream(buffer, outputFormat, &audioCodec, &audioCodecCtx);
     }    
 
     av_dump_format(outputFormat, 0, output, 1);
@@ -168,7 +168,20 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
             av_err2str(ret));
     }
 
-    //av_write_trailer(outputFormat);
+    if (!cb_is_empty(buffer))
+    {
+        if (buffer->audio != NULL)
+        {
+            cb_write_queue(buffer->audio->queue, outputFormat, audioCodecCtx);
+        }
+
+        if (buffer->video != NULL)
+        {
+            cb_write_queue(buffer->video->queue, outputFormat, videoCodecCtx);
+        }
+
+        //av_write_trailer(outputFormat);
+    }    
 
     avcodec_free_context(&videoCodecCtx);
     avcodec_free_context(&audioCodecCtx);
@@ -183,9 +196,27 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
     return ret;
 }
 
+int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecContext* encoder)
+{
+    AVPacket* pkt = av_packet_alloc();
+    int64_t frameCount = (av_fifo_size(queue) - av_fifo_space(queue)) / sizeof(AVFrame*);
+    int stNum = get_stream_number(outputFormat, encoder->codec_type);
+    for (int i = 0; i < frameCount; i++)
+    {
+        AVFrame* frame = av_mallocz(sizeof(AVFrame*));
+        av_fifo_generic_read(queue, frame, sizeof(AVFrame*), NULL);
+        
+        write_frame(outputFormat, encoder, outputFormat->streams[stNum], frame, pkt);
+
+        av_frame_free(frame);
+    }
+
+    return 0;
+}
+
 int cb_add_video_stream(
     ContinuousBuffer* buffer,
-    AVOutputFormat* outputFormatContext,
+    AVFormatContext* outputFormat,
     AVCodec** codec,
     AVCodecContext** codecContext)
 {
@@ -198,6 +229,14 @@ int cb_add_video_stream(
             avcodec_get_name(buffer->video->codec));
         return -1;
     }
+
+    AVStream* st = avformat_new_stream(outputFormat, NULL);
+    if (st == NULL) {
+        fprintf(stderr, "Could not allocate stream\n");
+        return -1;
+    }
+
+    st->id = outputFormat->nb_streams - 1;
 
     c = avcodec_alloc_context3(*codec);
     if (!c) {
@@ -213,6 +252,8 @@ int cb_add_video_stream(
     /* frames per second */
     c->time_base = buffer->video->time_base;
     c->framerate = (AVRational){ buffer->video->time_base.den, buffer->video->time_base.num };
+
+    st->time_base = c->time_base;
 
     /* emit one intra frame every ten frames
      * check frame pict_type before passing frame
@@ -234,8 +275,10 @@ int cb_add_video_stream(
     }
 
     /* Some formats want stream headers to be separate. */
-    if (outputFormatContext->flags & AVFMT_GLOBALHEADER)
+    if (outputFormat->oformat->flags & AVFMT_GLOBALHEADER)
         c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    avcodec_parameters_from_context(st->codecpar, c);
 
     *codecContext = c;
 
@@ -244,7 +287,7 @@ int cb_add_video_stream(
 
 int cb_add_audio_stream(
     ContinuousBuffer* buffer,
-    AVOutputFormat* outputFormatContext,
+    AVFormatContext* outputFormat,
     AVCodec** codec,
     AVCodecContext** codecContext)
 {
@@ -257,6 +300,14 @@ int cb_add_audio_stream(
             avcodec_get_name(buffer->audio->codec));
         return -1;
     }
+
+    AVStream* st = avformat_new_stream(outputFormat, NULL);
+    if (st == NULL) {
+        fprintf(stderr, "Could not allocate stream\n");
+        return -1;
+    }
+
+    st->id = outputFormat->nb_streams - 1;
 
     c = avcodec_alloc_context3(*codec);
     if (!c) {
@@ -286,10 +337,31 @@ int cb_add_audio_stream(
     }
 
     /* Some formats want stream headers to be separate. */
-    if (outputFormatContext->flags & AVFMT_GLOBALHEADER)
+    if (outputFormat->oformat->flags & AVFMT_GLOBALHEADER)
         c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
     *codecContext = c;
 
+    st->time_base = (AVRational){ 1, c->sample_rate };
+
+    avcodec_parameters_from_context(st->codecpar, c);
+
     return 0;
+}
+
+int cb_is_empty(ContinuousBuffer* buffer) 
+{
+    int ret = 0;
+
+    if (buffer->audio != NULL)
+    {
+        ret = av_fifo_size(buffer->audio->queue) != av_fifo_space(buffer->audio->queue);
+    }
+
+    if (buffer->video != NULL)
+    {
+        ret = av_fifo_size(buffer->video->queue) != av_fifo_space(buffer->video->queue);
+    }
+
+    return ret;
 }

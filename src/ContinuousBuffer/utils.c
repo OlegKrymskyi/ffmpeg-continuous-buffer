@@ -79,3 +79,56 @@ int select_sample_rate(const AVCodec* codec)
     }
     return best_samplerate;
 }
+
+int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
+    AVStream* st, AVFrame* frame, AVPacket* pkt)
+{
+    int ret;
+
+    // send the frame to the encoder
+    ret = avcodec_send_frame(c, frame);
+    if (ret < 0) {
+        fprintf(stderr, "Error sending a frame to the encoder: %s\n",
+            av_err2str(ret));
+        exit(1);
+    }
+
+    while (ret >= 0) {
+        ret = avcodec_receive_packet(c, pkt);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            break;
+        else if (ret < 0) {
+            fprintf(stderr, "Error encoding a frame: %s\n", av_err2str(ret));
+            exit(1);
+        }
+
+        /* rescale output packet timestamp values from codec to stream timebase */
+        av_packet_rescale_ts(pkt, c->time_base, st->time_base);
+        pkt->stream_index = st->index;
+
+        /* Write the compressed frame to the media file. */
+        ret = av_interleaved_write_frame(fmt_ctx, pkt);
+        /* pkt is now blank (av_interleaved_write_frame() takes ownership of
+         * its contents and resets pkt), so that no unreferencing is necessary.
+         * This would be different if one used av_write_frame(). */
+        if (ret < 0) {
+            fprintf(stderr, "Error while writing output packet: %s\n", av_err2str(ret));
+            exit(1);
+        }
+    }
+
+    return ret == AVERROR_EOF ? 1 : 0;
+}
+
+int get_stream_number(AVFormatContext* fmt_ctx, enum AVMediaType type)
+{
+    for (int i = 0; i < fmt_ctx->nb_streams; i++)
+    {
+        if (fmt_ctx->streams[i]->codecpar->codec_type == type)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}

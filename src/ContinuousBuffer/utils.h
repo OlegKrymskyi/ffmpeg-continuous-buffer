@@ -18,3 +18,8 @@ int check_sample_fmt(const AVCodec* codec, enum AVSampleFormat sample_fmt);
 int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContext* inputFormat, enum AVMediaType type);
 
 int select_sample_rate(const AVCodec* codec);
+
+int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
+    AVStream* st, AVFrame* frame, AVPacket* pkt);
+
+int get_stream_number(AVFormatContext* fmt_ctx, enum AVMediaType type);
