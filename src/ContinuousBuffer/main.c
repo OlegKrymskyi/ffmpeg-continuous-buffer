@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "utils.h"
 #include "continuous-buffer.h"
 
 static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* frame, ContinuousBuffer* buffer)
@@ -40,8 +41,6 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
 
 int main()
 {
-    printf("Hello world");
-
     const char* src_filename = "C:/temp/game12-cut.mp4";
 
     AVFormatContext* inputFormat = NULL;
