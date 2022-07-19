@@ -46,7 +46,7 @@ ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, i
         time_base.num = inputFormat->streams[videoStreamIdx]->avg_frame_rate.den;
         buffer->video = cb_allocate_video_buffer(
             time_base,
-            inputFormat->video_codec_id, 
+            videoDecCtx->codec_id,
             videoDecCtx->bit_rate,
             videoDecCtx->width, 
             videoDecCtx->height, 
@@ -61,7 +61,7 @@ ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, i
     {
         buffer->audio = cb_allocate_audio_buffer(
             inputFormat->streams[audioStreamIdx]->time_base, 
-            inputFormat->video_codec_id, 
+            audioDecCtx->codec_id,
             audioDecCtx->sample_rate,
             audioDecCtx->bit_rate,
             audioDecCtx->channel_layout,
@@ -124,7 +124,6 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
     AVOutputFormat* fmt;
     AVCodec* audioCodec, * videoCodec;
     AVCodecContext* audioCodecCtx, * videoCodecCtx;
-    AVDictionary* opt = NULL;
 
     /* allocate the output media context */
     avformat_alloc_output_context2(&outputFormat, NULL, format, output);
@@ -146,7 +145,7 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
         cb_add_video_stream(buffer, fmt, &videoCodec, &videoCodecCtx);
     }
     if (fmt->audio_codec != AV_CODEC_ID_NONE && buffer->audio != NULL) {
-        cb_add_audio_stream(buffer->audio, fmt, &audioCodec, &audioCodecCtx);
+        cb_add_audio_stream(buffer, fmt, &audioCodec, &audioCodecCtx);
     }    
 
     av_dump_format(outputFormat, 0, output, 1);
@@ -163,13 +162,13 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
     }
 
     /* Write the stream header, if any. */
-    ret = avformat_write_header(outputFormat, &opt);
+    ret = avformat_write_header(outputFormat, NULL);
     if (ret < 0) {
         fprintf(stderr, "Error occurred when opening output file: %s\n",
             av_err2str(ret));
     }
 
-    av_write_trailer(outputFormat);
+    //av_write_trailer(outputFormat);
 
     avcodec_free_context(&videoCodecCtx);
     avcodec_free_context(&audioCodecCtx);
@@ -200,7 +199,7 @@ int cb_add_video_stream(
         return -1;
     }
 
-    c = avcodec_alloc_context3(codec);
+    c = avcodec_alloc_context3(*codec);
     if (!c) {
         fprintf(stderr, "Could not allocate video codec context\n");
         return -1;
@@ -229,7 +228,7 @@ int cb_add_video_stream(
         av_opt_set(c->priv_data, "preset", "slow", 0);
 
     /* open it */
-    if (avcodec_open2(c, codec, NULL) < 0) {
+    if (avcodec_open2(c, *codec, NULL) < 0) {
         fprintf(stderr, "Could not open codec\n");
         return -1;
     }
@@ -259,7 +258,7 @@ int cb_add_audio_stream(
         return -1;
     }
 
-    c = avcodec_alloc_context3(codec);
+    c = avcodec_alloc_context3(*codec);
     if (!c) {
         fprintf(stderr, "Could not allocate video codec context\n");
         return -1;
@@ -270,18 +269,18 @@ int cb_add_audio_stream(
 
     /* check that the encoder supports s16 pcm input */
     c->sample_fmt = buffer->audio->sample_fmt;
-    if (!check_sample_fmt(codec, c->sample_fmt)) {
+    if (!check_sample_fmt(*codec, c->sample_fmt)) {
         fprintf(stderr, "Encoder does not support sample format %s",
             av_get_sample_fmt_name(c->sample_fmt));
         exit(1);
     }
 
     /* select other audio parameters supported by the encoder */
-    c->sample_rate = select_sample_rate(codec);
+    c->sample_rate = select_sample_rate(*codec);
     c->channel_layout = buffer->audio->channel_layout;
 
     /* open it */
-    if (avcodec_open2(c, codec, NULL) < 0) {
+    if (avcodec_open2(c, *codec, NULL) < 0) {
         fprintf(stderr, "Could not open codec\n");
         return -1;
     }

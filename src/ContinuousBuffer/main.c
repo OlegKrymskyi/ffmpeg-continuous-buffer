@@ -41,7 +41,7 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
 
 int main()
 {
-    const char* src_filename = "C:/temp/game12-cut.mp4";
+    const char* src_filename = "C:/temp/replay.mkv";
 
     AVFormatContext* inputFormat = NULL;
     /* open input file, and allocate format context */
@@ -106,6 +106,8 @@ int main()
         decode_packet(videoDecCtx, NULL, frame, buffer);
     if (audioDecCtx)
         decode_packet(audioDecCtx, NULL, frame, buffer);
+
+    cb_flush_to_file(buffer, "C:/temp/replay-buf.mkv", NULL);
 
 end:
     cb_free_buffer(&buffer);
