@@ -171,7 +171,7 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
             av_err2str(ret));
     }
 
-    if (!cb_is_empty(buffer))
+    if (cb_is_empty(buffer) == 0)
     {
         if (buffer->audio != NULL)
         {
@@ -183,7 +183,7 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
             cb_write_queue(buffer->video->queue, outputFormat, videoCodecCtx);
         }
 
-        //av_write_trailer(outputFormat);
+        av_write_trailer(outputFormat);
     }    
 
     avcodec_free_context(&videoCodecCtx);
@@ -211,8 +211,10 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
         
         write_frame(outputFormat, encoder, outputFormat->streams[stNum], frame, pkt);
 
-        av_frame_free(frame);
+        av_frame_free(&frame);
     }
+
+    write_frame(outputFormat, encoder, outputFormat->streams[stNum], NULL, pkt);
 
     return 0;
 }
@@ -354,17 +356,15 @@ int cb_add_audio_stream(
 
 int cb_is_empty(ContinuousBuffer* buffer) 
 {
-    int ret = 0;
-
-    if (buffer->audio != NULL)
+    if (buffer->audio != NULL && av_fifo_size(buffer->audio->queue) > 0)
     {
-        ret = av_fifo_size(buffer->audio->queue) != av_fifo_space(buffer->audio->queue);
+        return 0;
     }
 
-    if (buffer->video != NULL)
+    if (buffer->video != NULL && av_fifo_size(buffer->video->queue) > 0)
     {
-        ret = av_fifo_size(buffer->video->queue) != av_fifo_space(buffer->video->queue);
+        return 0;
     }
 
-    return ret;
+    return 1;
 }

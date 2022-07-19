@@ -107,7 +107,7 @@ int main()
     if (audioDecCtx)
         decode_packet(audioDecCtx, NULL, frame, buffer);
 
-    cb_flush_to_file(buffer, "C:/temp/replay-buf.mkv", NULL);
+    cb_flush_to_file(buffer, "C:/temp/replay-buf.mp4", NULL);
 
 end:
     cb_free_buffer(&buffer);
