@@ -25,7 +25,7 @@ int main()
 
     BufferStream* buffer = cb_allocate_buffer_from_source(inputFormat);
 
-    cb_free_buffer(buffer);
+    cb_free_buffer(&buffer);
 
     avformat_close_input(&inputFormat);
 }

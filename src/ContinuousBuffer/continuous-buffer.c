@@ -2,46 +2,49 @@
 
 BufferVideoStream* cb_allocate_video_buffer(AVRational time_base, enum AVCodecID codec, int width, int height, enum AVPixelFormat pixel_format)
 {
-    BufferVideoStream buffer;
-    buffer.codec = codec;
-    buffer.width = width;
-    buffer.height = height;
-    buffer.pixel_format = pixel_format;
-    buffer.time_base = time_base;
+    BufferVideoStream* buffer = av_mallocz(sizeof(*buffer));
+    buffer->codec = codec;
+    buffer->width = width;
+    buffer->height = height;
+    buffer->pixel_format = pixel_format;
+    buffer->time_base = time_base;
 
     // Initialize queue for around 20 secs.
-    buffer.queue = av_fifo_alloc_array((size_t)time_base.den * 20, sizeof(AVFrame*));
-    return &buffer;
+    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * 20, sizeof(AVFrame*));
+    return buffer;
 }
 
 BufferAudioStream* cb_allocate_audio_buffer(AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout)
 {
-    BufferAudioStream buffer;
-    buffer.codec = codec;
-    buffer.sample_rate = sample_rate;
-    buffer.bit_rate = bit_rate;
-    buffer.channel_layout = channel_layout;
-    buffer.time_base = time_base;
+    BufferAudioStream* buffer = av_mallocz(sizeof(*buffer));
+    buffer->codec = codec;
+    buffer->sample_rate = sample_rate;
+    buffer->bit_rate = bit_rate;
+    buffer->channel_layout = channel_layout;
+    buffer->time_base = time_base;
 
     // Initialize queue for around 20 secs.
-    buffer.queue = av_fifo_alloc_array((size_t)time_base.den * 20, sizeof(AVFrame*));
+    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * 20, sizeof(AVFrame*));
 
-    return &buffer;
+    return buffer;
 }
 
 BufferStream* cb_allocate_buffer_from_source(AVFormatContext* inputFormat)
 {
-    BufferStream buffer;
+    BufferStream* buffer = av_mallocz(sizeof(*buffer));
 
-    buffer.video = NULL;
-    buffer.audio = NULL;
+    buffer->video = NULL;
+    buffer->audio = NULL;
 
     int videoStreamIdx;
     AVCodecContext* videoDecCtx = NULL;
     if (open_codec_context(&videoStreamIdx, &videoDecCtx, inputFormat, AVMEDIA_TYPE_VIDEO) >= 0)
     {
-        buffer.video = cb_allocate_video_buffer(
-            inputFormat->streams[videoStreamIdx]->time_base, 
+        AVRational time_base;
+        time_base.den = inputFormat->streams[videoStreamIdx]->avg_frame_rate.num;
+        time_base.num = inputFormat->streams[videoStreamIdx]->avg_frame_rate.den;
+        buffer->video = cb_allocate_video_buffer(
+            time_base,
             inputFormat->video_codec_id, 
             videoDecCtx->width, 
             videoDecCtx->height, 
@@ -53,7 +56,7 @@ BufferStream* cb_allocate_buffer_from_source(AVFormatContext* inputFormat)
     AVCodecContext* audioDecCtx = NULL;
     if (open_codec_context(&audioStreamIdx, &audioDecCtx, inputFormat, AVMEDIA_TYPE_AUDIO) >= 0)
     {
-        buffer.audio = cb_allocate_audio_buffer(
+        buffer->audio = cb_allocate_audio_buffer(
             inputFormat->streams[audioStreamIdx]->time_base, 
             inputFormat->video_codec_id, 
             audioDecCtx->sample_rate,
@@ -62,7 +65,7 @@ BufferStream* cb_allocate_buffer_from_source(AVFormatContext* inputFormat)
         avcodec_free_context(&audioDecCtx);
     }
 
-    return &buffer;
+    return buffer;
 }
 
 int cb_free_buffer(BufferStream** buffer)
