@@ -1,40 +1,41 @@
 #include "continuous-buffer.h"
 
-BufferVideoStream* cb_allocate_video_buffer(AVRational time_base, enum AVCodecID codec, int width, int height, enum AVPixelFormat pixel_format)
+ContinuousBufferVideo* cb_allocate_video_buffer(AVRational time_base, enum AVCodecID codec, int width, int height, enum AVPixelFormat pixel_format)
 {
-    BufferVideoStream* buffer = av_mallocz(sizeof(*buffer));
+    ContinuousBufferVideo* buffer = av_mallocz(sizeof(*buffer));
     buffer->codec = codec;
     buffer->width = width;
     buffer->height = height;
     buffer->pixel_format = pixel_format;
     buffer->time_base = time_base;
 
-    // Initialize queue for around 20 secs.
-    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * 20, sizeof(AVFrame*));
+    // Initialize queue for around 10 secs.
+    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * 10, sizeof(AVFrame*));
     return buffer;
 }
 
-BufferAudioStream* cb_allocate_audio_buffer(AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout)
+ContinuousBufferAudio* cb_allocate_audio_buffer(AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout)
 {
-    BufferAudioStream* buffer = av_mallocz(sizeof(*buffer));
+    ContinuousBufferAudio* buffer = av_mallocz(sizeof(*buffer));
     buffer->codec = codec;
     buffer->sample_rate = sample_rate;
     buffer->bit_rate = bit_rate;
     buffer->channel_layout = channel_layout;
     buffer->time_base = time_base;
 
-    // Initialize queue for around 20 secs.
-    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * 20, sizeof(AVFrame*));
+    // Initialize queue for around 10 secs.
+    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * 10, sizeof(AVFrame*));
 
     return buffer;
 }
 
-BufferStream* cb_allocate_buffer_from_source(AVFormatContext* inputFormat)
+ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, int64_t duration)
 {
-    BufferStream* buffer = av_mallocz(sizeof(*buffer));
+    ContinuousBuffer* buffer = av_mallocz(sizeof(*buffer));
 
     buffer->video = NULL;
     buffer->audio = NULL;
+    buffer->duration = duration;
 
     int videoStreamIdx;
     AVCodecContext* videoDecCtx = NULL;
@@ -68,9 +69,9 @@ BufferStream* cb_allocate_buffer_from_source(AVFormatContext* inputFormat)
     return buffer;
 }
 
-int cb_free_buffer(BufferStream** buffer)
+int cb_free_buffer(ContinuousBuffer** buffer)
 {
-    BufferStream* b = *buffer;
+    ContinuousBuffer* b = *buffer;
 
     if (b->audio != NULL)
     {
@@ -87,7 +88,33 @@ int cb_free_buffer(BufferStream** buffer)
     *buffer = NULL;
 }
 
-static int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContext* inputFormat, enum AVMediaType type)
+int cb_push_frame(ContinuousBuffer* buffer, AVFrame* frame, enum AVMediaType type)
+{
+    if (type == AVMEDIA_TYPE_VIDEO)
+    {
+        return cb_push_frame_to_queue(buffer->video->queue, frame);
+    }
+    else if (type == AVMEDIA_TYPE_AUDIO)
+    {
+        return cb_push_frame_to_queue(buffer->audio->queue, frame);
+    }
+
+    return -1;
+}
+
+int cb_push_frame_to_queue(AVFifoBuffer* queue, AVFrame* frame)
+{
+    if (av_fifo_space(queue) <= 0)
+    {
+        AVFrame* removedFrame = av_frame_alloc();
+        av_fifo_generic_read(queue, frame, sizeof(frame), NULL);
+        av_frame_free(&removedFrame);
+    }
+
+    return av_fifo_generic_write(queue, frame, sizeof(frame), NULL);
+}
+
+int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContext* inputFormat, enum AVMediaType type)
 {
     int ret, stream_index;
     AVStream* st;
@@ -137,4 +164,3 @@ static int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVForma
 
     return 0;
 }
-

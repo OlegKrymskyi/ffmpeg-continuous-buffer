@@ -11,7 +11,7 @@
 #include <libswresample/swresample.h>
 #include <libavutil/fifo.h>
 
-typedef struct BufferVideoStream {    
+typedef struct ContinuousBufferVideo {
     AVFifoBuffer* queue;
     AVRational time_base;
 
@@ -20,9 +20,9 @@ typedef struct BufferVideoStream {
     int height;
     enum AVPixelFormat pixel_format;
 
-} BufferVideoStream;
+} ContinuousBufferVideo;
 
-typedef struct BufferAudioStream {
+typedef struct ContinuousBufferAudio {
 
     AVFifoBuffer* queue;
     AVRational time_base;
@@ -32,21 +32,27 @@ typedef struct BufferAudioStream {
     int64_t bit_rate;
     int channel_layout;
 
-} BufferAudioStream;
+} ContinuousBufferAudio;
 
-typedef struct BufferStream {
+typedef struct ContinuousBuffer {
 
-    BufferVideoStream* video;
-    BufferAudioStream* audio;
+    ContinuousBufferVideo* video;
+    ContinuousBufferAudio* audio;
 
-} BufferStream;
+    int64_t duration;
 
-static int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContext* inputFormat, enum AVMediaType type);
+} ContinuousBuffer;
 
-BufferVideoStream* cb_allocate_video_buffer(AVRational time_base, enum AVCodecID codec, int width, int height, enum AVPixelFormat pixel_format);
+int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContext* inputFormat, enum AVMediaType type);
 
-BufferAudioStream* cb_allocate_audio_buffer(AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout);
+ContinuousBufferVideo* cb_allocate_video_buffer(AVRational time_base, enum AVCodecID codec, int width, int height, enum AVPixelFormat pixel_format);
 
-BufferStream* cb_allocate_buffer_from_source(AVFormatContext* inputFormat);
+ContinuousBufferAudio* cb_allocate_audio_buffer(AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout);
 
-int cb_free_buffer(BufferStream** buffer);
+ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, int64_t duration);
+
+int cb_free_buffer(ContinuousBuffer** buffer);
+
+int cb_push_frame(ContinuousBuffer* buffer, AVFrame* frame, enum AVMediaType type);
+
+int cb_push_frame_to_queue(AVFifoBuffer* queue, AVFrame* frame);
