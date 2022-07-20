@@ -149,3 +149,128 @@ AVFrame* copy_frame(AVFrame* src)
     av_frame_copy_props(dest, src);
     return dest;
 }
+
+int convert_video_frame(AVFrame* src, AVFrame* dest)
+{
+    static struct SwsContext* sws_ctx;
+
+    sws_ctx = sws_getContext(src->width, src->height, src->format,
+        dest->width, dest->height, dest->format,
+        SWS_BICUBIC, NULL, NULL, NULL);
+
+    if (!sws_ctx) {
+        return -1;
+    }
+
+    sws_scale(sws_ctx,
+        src->data,
+        src->linesize,
+        0,
+        src->height,
+        dest->data,
+        dest->linesize);
+
+    sws_freeContext(sws_ctx);
+
+    return 0;
+}
+
+void encode_frame_to_file(AVCodecContext* enc_ctx, AVFrame* frame, AVPacket* pkt, FILE* outfile)
+{
+    int ret;
+
+    /* send the frame to the encoder */
+    if (frame)
+        printf("Send frame %3"PRId64"\n", frame->pts);
+
+    ret = avcodec_send_frame(enc_ctx, frame);
+    if (ret < 0) {
+        fprintf(stderr, "Error sending a frame for encoding\n");
+        exit(1);
+    }
+
+    while (ret >= 0) {
+        ret = avcodec_receive_packet(enc_ctx, pkt);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            return;
+        else if (ret < 0) {
+            fprintf(stderr, "Error during encoding\n");
+            exit(1);
+        }
+
+        printf("Write packet %3"PRId64" (size=%5d)\n", pkt->pts, pkt->size);
+        fwrite(pkt->data, 1, pkt->size, outfile);
+        av_packet_unref(pkt);
+    }
+}
+
+int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_name)
+{
+    const AVCodec* codec;
+    AVCodecContext* c = NULL;
+    int ret;
+    FILE* f;
+    AVPacket* pkt;
+
+    AVFrame* tmp = av_frame_alloc();
+    if (!tmp) {
+        fprintf(stderr, "Could not allocate video frame\n");
+        return -1;
+    }
+    tmp->format = AV_PIX_FMT_BGR24;
+    tmp->width = frame->width;
+    tmp->height = frame->height;
+
+    ret = av_frame_get_buffer(tmp, 0);
+    if (ret < 0) {
+        fprintf(stderr, "Could not allocate the video frame data\n");
+        return -1;
+    }
+
+    convert_video_frame(frame, tmp);
+
+    /* find the mpeg1video encoder */
+    codec = avcodec_find_encoder_by_name(codec_name);
+    if (!codec) {
+        fprintf(stderr, "Codec '%s' not found\n", codec_name);
+        return -1;
+    }
+
+    c = avcodec_alloc_context3(codec);
+    if (!c) {
+        fprintf(stderr, "Could not allocate video codec context\n");
+        return -1;
+    }
+
+    pkt = av_packet_alloc();
+    if (!pkt)
+        return -1;
+
+    /* resolution must be a multiple of two */
+    c->width = frame->width;
+    c->height = frame->height;
+    c->time_base = (AVRational){ 1, 1 };
+    c->pix_fmt = tmp->format;
+
+    /* open it */
+    ret = avcodec_open2(c, codec, NULL);
+    if (ret < 0) {
+        fprintf(stderr, "Could not open codec: %s\n", av_err2str(ret));
+        return -1;
+    }
+
+    f = fopen(filename, "wb");
+    if (!f) {
+        fprintf(stderr, "Could not open %s\n", filename);
+        return -1;
+    }
+
+    /* flush the encoder */
+    encode_frame_to_file(c, tmp, pkt, f);
+
+    fclose(f);
+
+    avcodec_free_context(&c);
+    av_frame_free(&tmp);
+    av_packet_free(&pkt);
+}

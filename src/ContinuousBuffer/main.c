@@ -5,6 +5,7 @@
 #include "utils.h"
 #include "continuous-buffer.h"
 
+int videoFrameCounter = 0;
 static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* frame, ContinuousBuffer* buffer)
 {
     int ret = 0;
@@ -30,6 +31,16 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
         }
 
         ret = cb_push_frame(buffer, frame, dec->codec->type);
+
+        if (dec->codec->type == AVMEDIA_TYPE_VIDEO)
+        {
+            videoFrameCounter++;
+        }
+
+        if (videoFrameCounter == 60)
+        {
+            cb_flush_to_file(buffer, "C:/temp/replay-buf.mp4", NULL);
+        }
 
         av_frame_unref(frame);
         if (ret < 0)
@@ -107,7 +118,7 @@ int main()
     if (audioDecCtx)
         decode_packet(audioDecCtx, NULL, frame, buffer);
 
-    cb_flush_to_file(buffer, "C:/temp/replay-buf.mp4", NULL);
+    cb_flush_to_file(buffer, "C:/temp/replay-buf.jpg", NULL);
 
 end:
     cb_free_buffer(&buffer);

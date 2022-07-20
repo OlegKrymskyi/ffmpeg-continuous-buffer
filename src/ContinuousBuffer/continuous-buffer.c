@@ -118,6 +118,7 @@ int cb_push_frame_to_queue(AVFifoBuffer* queue, AVFrame* frame)
     }
 
     AVFrame* cloneFrame = copy_frame(frame);
+    cloneFrame->pkt_pos = -1;
     return av_fifo_generic_write(queue, cloneFrame, sizeof(AVFrame), NULL);
 }
 
@@ -173,14 +174,14 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
 
     if (cb_is_empty(buffer) == 0)
     {
-        if (buffer->audio != NULL)
-        {
-            cb_write_queue(buffer->audio->queue, outputFormat, audioCodecCtx);
-        }
-
         if (buffer->video != NULL)
         {
             cb_write_queue(buffer->video->queue, outputFormat, videoCodecCtx);
+        }
+
+        if (buffer->audio != NULL)
+        {
+            cb_write_queue(buffer->audio->queue, outputFormat, audioCodecCtx);
         }
 
         av_write_trailer(outputFormat);
@@ -208,7 +209,7 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
     {
         AVFrame* frame = av_mallocz(sizeof(AVFrame));
         av_fifo_generic_read(queue, frame, sizeof(AVFrame), NULL);
-        
+
         write_frame(outputFormat, encoder, outputFormat->streams[stNum], frame, pkt);
 
         av_frame_free(&frame);
