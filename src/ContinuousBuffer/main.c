@@ -37,9 +37,10 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
             videoFrameCounter++;
         }
 
-        if (videoFrameCounter == 60)
+        if (videoFrameCounter == 60*10)
         {
             cb_flush_to_file(buffer, "C:/temp/replay-buf.mp4", NULL);
+            return -1;
         }
 
         av_frame_unref(frame);

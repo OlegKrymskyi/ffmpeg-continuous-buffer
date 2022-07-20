@@ -144,9 +144,7 @@ AVFrame* copy_frame(AVFrame* src)
     dest->nb_samples = src->nb_samples;
     dest->sample_rate = src->sample_rate;
     av_frame_get_buffer(dest, 0);
-    av_frame_make_writable(dest);
     av_frame_copy(dest, src);
-    av_frame_copy_props(dest, src);
     return dest;
 }
 

@@ -118,7 +118,7 @@ int cb_push_frame_to_queue(AVFifoBuffer* queue, AVFrame* frame)
     }
 
     AVFrame* cloneFrame = copy_frame(frame);
-    cloneFrame->pkt_pos = -1;
+    cloneFrame->pts = size / sizeof(AVFrame);
     return av_fifo_generic_write(queue, cloneFrame, sizeof(AVFrame), NULL);
 }
 
@@ -170,6 +170,7 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
     if (ret < 0) {
         fprintf(stderr, "Error occurred when opening output file: %s\n",
             av_err2str(ret));
+        return -1;
     }
 
     if (cb_is_empty(buffer) == 0)
@@ -205,12 +206,36 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
     AVPacket* pkt = av_packet_alloc();
     int64_t frameCount = av_fifo_size(queue) / sizeof(AVFrame);
     int stNum = get_stream_number(outputFormat, encoder->codec_type);
+    
     for (int i = 0; i < frameCount; i++)
     {
         AVFrame* frame = av_mallocz(sizeof(AVFrame));
         av_fifo_generic_read(queue, frame, sizeof(AVFrame), NULL);
 
-        write_frame(outputFormat, encoder, outputFormat->streams[stNum], frame, pkt);
+        if (encoder->codec_type == AVMEDIA_TYPE_VIDEO)
+        {
+            AVFrame* tmp = av_frame_alloc();
+            if (!tmp) {
+                fprintf(stderr, "Could not allocate video frame\n");
+                return -1;
+            }
+            tmp->format = encoder->pix_fmt;
+            tmp->width = frame->width;
+            tmp->height = frame->height;
+            tmp->pts = i;
+
+            av_frame_get_buffer(tmp, 0);
+
+            convert_video_frame(frame, tmp);
+
+            write_frame(outputFormat, encoder, outputFormat->streams[stNum], tmp, pkt);
+            
+            av_frame_free(&tmp);
+        }
+        else
+        {
+            write_frame(outputFormat, encoder, outputFormat->streams[stNum], frame, pkt);
+        }
 
         av_frame_free(&frame);
     }
