@@ -131,7 +131,6 @@ int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64
     int size = av_fifo_size(buffer->queue);
 
     int64_t duration = cb_get_buffer_stream_duration(buffer);
-    //printf("queue %d current duration %d ms\n", buffer->type, duration);
 
     while (av_fifo_space(buffer->queue) <= 0 || duration >= maxDuration)
     {
@@ -236,8 +235,6 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
         AVFrame* frame = av_mallocz(sizeof(AVFrame));
         av_fifo_generic_read(queue, frame, sizeof(AVFrame), NULL);
 
-        //frame->pts = -1;
-        printf("%d %d\n", encoder->codec_type, frame->pts);
         if (encoder->codec_type == AVMEDIA_TYPE_VIDEO)
         {
             // Temporary fix,somehow,video files
