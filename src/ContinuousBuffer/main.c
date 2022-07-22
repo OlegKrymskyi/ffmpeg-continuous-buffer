@@ -37,9 +37,11 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
             videoFrameCounter++;
         }
 
-        if (videoFrameCounter == 60*10)
+        if (videoFrameCounter == 60*20)
         {
             cb_flush_to_file(buffer, "C:/temp/replay-buf.mp4", NULL);
+
+            // Finish file reading and exit the program
             return -1;
         }
 
@@ -53,7 +55,7 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
 
 int main()
 {
-    const char* src_filename = "C:/temp/replay.mkv";
+    const char* src_filename = "C:/temp/game11.mp4";
 
     AVFormatContext* inputFormat = NULL;
     /* open input file, and allocate format context */
@@ -68,7 +70,7 @@ int main()
         exit(1);
     }
 
-    ContinuousBuffer* buffer = cb_allocate_buffer_from_source(inputFormat, 20);
+    ContinuousBuffer* buffer = cb_allocate_buffer_from_source(inputFormat, 10000);
 
     int videoStreamIdx = -1;
     AVCodecContext* videoDecCtx = NULL;
@@ -118,8 +120,6 @@ int main()
         decode_packet(videoDecCtx, NULL, frame, buffer);
     if (audioDecCtx)
         decode_packet(audioDecCtx, NULL, frame, buffer);
-
-    cb_flush_to_file(buffer, "C:/temp/replay-buf.jpg", NULL);
 
 end:
     cb_free_buffer(&buffer);

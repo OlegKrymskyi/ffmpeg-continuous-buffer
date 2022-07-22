@@ -1,8 +1,9 @@
 #include "continuous-buffer.h"
 
-ContinuousBufferVideo* cb_allocate_video_buffer(AVRational time_base, enum AVCodecID codec, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format, int64_t duration)
+ContinuousBufferStream* cb_allocate_video_buffer(AVRational time_base, enum AVCodecID codec, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format, int64_t duration)
 {
-    ContinuousBufferVideo* buffer = av_mallocz(sizeof(*buffer));
+    ContinuousBufferStream* buffer = av_mallocz(sizeof(*buffer));
+    buffer->type = AVMEDIA_TYPE_VIDEO;
     buffer->codec = codec;
     buffer->width = width;
     buffer->height = height;
@@ -10,21 +11,24 @@ ContinuousBufferVideo* cb_allocate_video_buffer(AVRational time_base, enum AVCod
     buffer->time_base = time_base;
     buffer->bit_rate = bit_rate;
 
-    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration, sizeof(AVFrame));
+    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration / 1000, sizeof(AVFrame));
     return buffer;
 }
 
-ContinuousBufferAudio* cb_allocate_audio_buffer(AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout, enum AVSampleFormat sample_fmt, int64_t duration)
+ContinuousBufferStream* cb_allocate_audio_buffer(AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout, 
+    enum AVSampleFormat sample_fmt, int frame_size, int64_t duration)
 {
-    ContinuousBufferAudio* buffer = av_mallocz(sizeof(*buffer));
+    ContinuousBufferStream* buffer = av_mallocz(sizeof(*buffer));
+    buffer->type = AVMEDIA_TYPE_AUDIO;
     buffer->codec = codec;
     buffer->sample_rate = sample_rate;
     buffer->bit_rate = bit_rate;
     buffer->channel_layout = channel_layout;
     buffer->time_base = time_base;
     buffer->sample_fmt = sample_fmt;
+    buffer->frame_size = frame_size;
 
-    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration, sizeof(AVFrame));
+    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration / ((size_t)frame_size * 1000), sizeof(AVFrame));
 
     return buffer;
 }
@@ -60,12 +64,13 @@ ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, i
     if (open_codec_context(&audioStreamIdx, &audioDecCtx, inputFormat, AVMEDIA_TYPE_AUDIO) >= 0)
     {
         buffer->audio = cb_allocate_audio_buffer(
-            inputFormat->streams[audioStreamIdx]->time_base, 
+            inputFormat->streams[audioStreamIdx]->time_base,
             audioDecCtx->codec_id,
             audioDecCtx->sample_rate,
             audioDecCtx->bit_rate,
             audioDecCtx->channel_layout,
             audioDecCtx->sample_fmt,
+            audioDecCtx->frame_size,
             duration);
         avcodec_free_context(&audioDecCtx);
     }
@@ -94,32 +99,51 @@ int cb_free_buffer(ContinuousBuffer** buffer)
 
 int cb_push_frame(ContinuousBuffer* buffer, AVFrame* frame, enum AVMediaType type)
 {
-    if (type == AVMEDIA_TYPE_VIDEO)
+    if (type == AVMEDIA_TYPE_VIDEO && buffer->video != NULL)
     {
-        return cb_push_frame_to_queue(buffer->video->queue, frame);
+        return cb_push_frame_to_queue(buffer->video, frame, buffer->duration);
     }
-    else if (type == AVMEDIA_TYPE_AUDIO)
+    else if (type == AVMEDIA_TYPE_AUDIO && buffer->audio != NULL)
     {
-        return cb_push_frame_to_queue(buffer->audio->queue, frame);
+        return cb_push_frame_to_queue(buffer->audio, frame, buffer->duration);
     }
 
     return -1;
 }
 
-int cb_push_frame_to_queue(AVFifoBuffer* queue, AVFrame* frame)
+int64_t cb_get_buffer_stream_duration(ContinuousBufferStream* buffer)
 {
-    int space = av_fifo_space(queue);
-    int size = av_fifo_size(queue);
-    while (av_fifo_space(queue) <= 0)
+    double duration = av_q2d(buffer->time_base) * av_fifo_size(buffer->queue) / sizeof(AVFrame);
+    if (buffer->type == AVMEDIA_TYPE_AUDIO)
+    {
+        duration = duration * buffer->frame_size;
+    }
+
+    return duration * 1000;
+}
+
+int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64_t maxDuration)
+{
+    // Taking current amount the free space in the queue.
+    int space = av_fifo_space(buffer->queue);
+
+    // Taking current amount of queue which was already used.
+    int size = av_fifo_size(buffer->queue);
+
+    int64_t duration = cb_get_buffer_stream_duration(buffer);
+    //printf("queue %d current duration %d ms\n", buffer->type, duration);
+
+    while (av_fifo_space(buffer->queue) <= 0 || duration >= maxDuration)
     {
         AVFrame* removedFrame = av_mallocz(sizeof(AVFrame));
-        av_fifo_generic_read(queue, removedFrame, sizeof(AVFrame), NULL);
+        av_fifo_generic_read(buffer->queue, removedFrame, sizeof(AVFrame), NULL);
         av_frame_free(&removedFrame);
+
+        duration = cb_get_buffer_stream_duration(buffer);
     }
 
     AVFrame* cloneFrame = copy_frame(frame);
-    cloneFrame->pts = size / sizeof(AVFrame);
-    return av_fifo_generic_write(queue, cloneFrame, sizeof(AVFrame), NULL);
+    return av_fifo_generic_write(buffer->queue, cloneFrame, sizeof(AVFrame), NULL);
 }
 
 int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* format)
@@ -212,8 +236,11 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
         AVFrame* frame = av_mallocz(sizeof(AVFrame));
         av_fifo_generic_read(queue, frame, sizeof(AVFrame), NULL);
 
+        //frame->pts = -1;
+        printf("%d %d\n", encoder->codec_type, frame->pts);
         if (encoder->codec_type == AVMEDIA_TYPE_VIDEO)
         {
+            // Temporary fix,somehow,video files
             AVFrame* tmp = av_frame_alloc();
             if (!tmp) {
                 fprintf(stderr, "Could not allocate video frame\n");
@@ -233,7 +260,7 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
             av_frame_free(&tmp);
         }
         else
-        {
+        {            
             write_frame(outputFormat, encoder, outputFormat->streams[stNum], frame, pkt);
         }
 
