@@ -31,7 +31,7 @@ typedef struct ContinuousBufferStream {
     int sample_rate;    
     int channel_layout;
     enum AVSampleFormat sample_fmt;
-    int frame_size;
+    int nb_samples;
 
 } ContinuousBufferStream;
 

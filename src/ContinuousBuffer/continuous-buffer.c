@@ -26,7 +26,6 @@ ContinuousBufferStream* cb_allocate_audio_buffer(AVRational time_base, enum AVCo
     buffer->channel_layout = channel_layout;
     buffer->time_base = time_base;
     buffer->sample_fmt = sample_fmt;
-    buffer->frame_size = frame_size;
 
     buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration / ((size_t)frame_size * 1000), sizeof(AVFrame));
 
@@ -116,7 +115,7 @@ int64_t cb_get_buffer_stream_duration(ContinuousBufferStream* buffer)
     double duration = av_q2d(buffer->time_base) * av_fifo_size(buffer->queue) / sizeof(AVFrame);
     if (buffer->type == AVMEDIA_TYPE_AUDIO)
     {
-        duration = duration * buffer->frame_size;
+        duration = duration * buffer->nb_samples;
     }
 
     return duration * 1000;
@@ -136,13 +135,24 @@ int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64
     {
         AVFrame* removedFrame = av_mallocz(sizeof(AVFrame));
         av_fifo_generic_read(buffer->queue, removedFrame, sizeof(AVFrame), NULL);
+
+        if (buffer->type == AVMEDIA_TYPE_AUDIO)
+        {
+            buffer->nb_samples -= removedFrame->nb_samples;
+        }
+
         av_frame_free(&removedFrame);
 
         duration = cb_get_buffer_stream_duration(buffer);
     }
 
     AVFrame* cloneFrame = copy_frame(frame);
-    return av_fifo_generic_write(buffer->queue, cloneFrame, sizeof(AVFrame), NULL);
+    int ret = av_fifo_generic_write(buffer->queue, cloneFrame, sizeof(AVFrame), NULL);
+    if (ret == 0)
+    {
+        buffer->nb_samples += frame->nb_samples;
+    }
+    return ret;
 }
 
 int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* format)
@@ -230,6 +240,7 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
     int64_t frameCount = av_fifo_size(queue) / sizeof(AVFrame);
     int stNum = get_stream_number(outputFormat, encoder->codec_type);
     
+    int nb_samples = 0;
     for (int i = 0; i < frameCount; i++)
     {
         AVFrame* frame = av_mallocz(sizeof(AVFrame));
@@ -257,8 +268,10 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
             av_frame_free(&tmp);
         }
         else
-        {            
+        {
+            frame->pts = nb_samples;
             write_frame(outputFormat, encoder, outputFormat->streams[stNum], frame, pkt);
+            nb_samples += frame->nb_samples;
         }
 
         av_frame_free(&frame);
