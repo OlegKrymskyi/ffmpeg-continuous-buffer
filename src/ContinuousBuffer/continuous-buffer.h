@@ -53,6 +53,8 @@ ContinuousBufferStream* cb_allocate_audio_buffer(AVRational time_base, enum AVCo
 
 ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, int64_t duration);
 
+ContinuousBufferStream* cb_allocate_stream_buffer_from_decoder(AVFormatContext* inputFormat, AVCodecContext* decoder, int streamIndex, int64_t duration);
+
 int cb_free_buffer(ContinuousBuffer** buffer);
 
 int cb_push_frame(ContinuousBuffer* buffer, AVFrame* frame, enum AVMediaType type);
@@ -62,5 +64,7 @@ int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64
 int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* format);
 
 int cb_is_empty(ContinuousBuffer* buffer);
+
+ContinuousBuffer* cb_allocate_buffer(int64_t maxDuration);
 
 int64_t cb_get_buffer_stream_duration(ContinuousBufferStream* buffer);

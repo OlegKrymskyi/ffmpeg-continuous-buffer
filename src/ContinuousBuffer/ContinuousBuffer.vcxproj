@@ -165,10 +165,12 @@
   <ItemGroup>
     <ClCompile Include="continuous-buffer.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="stream_reader.c" />
     <ClCompile Include="utils.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="continuous-buffer.h" />
+    <ClInclude Include="stream_reader.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

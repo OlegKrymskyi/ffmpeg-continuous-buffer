@@ -32,6 +32,38 @@ ContinuousBufferStream* cb_allocate_audio_buffer(AVRational time_base, enum AVCo
     return buffer;
 }
 
+ContinuousBufferStream* cb_allocate_stream_buffer_from_decoder(AVFormatContext* inputFormat, AVCodecContext* decoder, int streamIndex, int64_t duration)
+{
+    if (decoder->codec->type == AVMEDIA_TYPE_VIDEO)
+    {
+        AVRational time_base;
+        time_base.den = inputFormat->streams[streamIndex]->avg_frame_rate.num;
+        time_base.num = inputFormat->streams[streamIndex]->avg_frame_rate.den;
+        return cb_allocate_video_buffer(
+            time_base,
+            decoder->codec_id,
+            decoder->bit_rate,
+            decoder->width,
+            decoder->height,
+            decoder->pix_fmt,
+            duration);
+    }
+    else if (decoder->codec->type == AVMEDIA_TYPE_AUDIO)
+    {
+        return cb_allocate_audio_buffer(
+            inputFormat->streams[streamIndex]->time_base,
+            decoder->codec_id,
+            decoder->sample_rate,
+            decoder->bit_rate,
+            decoder->channel_layout,
+            decoder->sample_fmt,
+            decoder->frame_size,
+            duration);
+    }
+
+    return NULL;
+}
+
 ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, int64_t duration)
 {
     ContinuousBuffer* buffer = av_mallocz(sizeof(*buffer));
@@ -44,17 +76,7 @@ ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, i
     AVCodecContext* videoDecCtx = NULL;
     if (open_codec_context(&videoStreamIdx, &videoDecCtx, inputFormat, AVMEDIA_TYPE_VIDEO) >= 0)
     {
-        AVRational time_base;
-        time_base.den = inputFormat->streams[videoStreamIdx]->avg_frame_rate.num;
-        time_base.num = inputFormat->streams[videoStreamIdx]->avg_frame_rate.den;
-        buffer->video = cb_allocate_video_buffer(
-            time_base,
-            videoDecCtx->codec_id,
-            videoDecCtx->bit_rate,
-            videoDecCtx->width, 
-            videoDecCtx->height, 
-            videoDecCtx->pix_fmt,
-            duration);
+        buffer ->video = cb_allocate_stream_buffer_from_decoder(inputFormat, videoDecCtx, videoStreamIdx, duration);
         avcodec_free_context(&videoDecCtx);
     }
 
@@ -62,15 +84,7 @@ ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, i
     AVCodecContext* audioDecCtx = NULL;
     if (open_codec_context(&audioStreamIdx, &audioDecCtx, inputFormat, AVMEDIA_TYPE_AUDIO) >= 0)
     {
-        buffer->audio = cb_allocate_audio_buffer(
-            inputFormat->streams[audioStreamIdx]->time_base,
-            audioDecCtx->codec_id,
-            audioDecCtx->sample_rate,
-            audioDecCtx->bit_rate,
-            audioDecCtx->channel_layout,
-            audioDecCtx->sample_fmt,
-            audioDecCtx->frame_size,
-            duration);
+        buffer->audio = cb_allocate_stream_buffer_from_decoder(inputFormat, audioDecCtx, audioStreamIdx, duration);
         avcodec_free_context(&audioDecCtx);
     }
 
@@ -92,6 +106,8 @@ int cb_free_buffer(ContinuousBuffer** buffer)
         av_fifo_free(b->video->queue);
         av_free(b->video);
     }
+
+    av_free(b);
 
     *buffer = NULL;
 }
@@ -430,4 +446,13 @@ int cb_is_empty(ContinuousBuffer* buffer)
     }
 
     return 1;
+}
+
+ContinuousBuffer* cb_allocate_buffer(int64_t maxDuration)
+{
+    ContinuousBuffer* buffer = av_mallocz(sizeof(ContinuousBuffer));
+
+    buffer->duration = maxDuration;
+
+    return buffer;
 }
