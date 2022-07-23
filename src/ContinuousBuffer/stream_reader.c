@@ -13,7 +13,11 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
     }
 
     AVRational time_base_q = { 1, AV_TIME_BASE };
-    int64_t pts_time = av_rescale_q(pkt->dts, dec->time_base, time_base_q);
+    int64_t pts_time = 0;
+    if (pkt != NULL)
+    {
+        pts_time = av_rescale_q(pkt->dts, dec->time_base, time_base_q);
+    }
 
     // get all the available frames from the decoder
     while (ret >= 0) {
