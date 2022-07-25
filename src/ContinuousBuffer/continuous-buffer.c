@@ -295,6 +295,8 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
 
     write_frame(outputFormat, encoder, outputFormat->streams[stNum], NULL, pkt);
 
+    av_packet_free(&pkt);
+
     return 0;
 }
 

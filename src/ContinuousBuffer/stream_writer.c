@@ -33,6 +33,22 @@ int sw_close_writer(StreamWriter** writer)
 
     if (w->audio_encoder != NULL)
     {
+        AVPacket* pkt = av_packet_alloc();
+        write_frame(w->output_context, w->audio_encoder, w->audio_stream_index, NULL, pkt);
+        av_packet_free(&pkt);
+    }
+
+    if (w->video_encoder != NULL)
+    {
+        AVPacket* pkt = av_packet_alloc();
+        write_frame(w->output_context, w->video_encoder, w->video_stream_index, NULL, pkt);
+        av_packet_free(&pkt);
+    }
+
+    av_write_trailer(w->output_context);
+
+    if (w->audio_encoder != NULL)
+    {
         avcodec_free_context(&w->audio_encoder);
     }
 
@@ -202,4 +218,48 @@ int sw_open_writer(StreamWriter* writer)
     }
 
     return ret;
+}
+
+int sw_write_frames(StreamWriter* writer, enum AVMediaType type, AVFrame* frames, int nb_frames)
+{
+    AVPacket* pkt = av_packet_alloc();
+    int stNum = get_stream_number(writer->output_context, type);
+
+    AVFrame* frame = frames;
+    for (int i = 0; i < nb_frames; i++)
+    {
+        if (type == AVMEDIA_TYPE_VIDEO)
+        {
+            // Temporary fix,somehow,video files
+            AVFrame* tmp = av_frame_alloc();
+            if (!tmp) {
+                fprintf(stderr, "Could not allocate video frame\n");
+                return -1;
+            }
+            tmp->format = writer->video_encoder->pix_fmt;
+            tmp->width = writer->video_encoder->width;
+            tmp->height = writer->video_encoder->height;
+            tmp->pts = writer->latest_video_pts;
+
+            av_frame_get_buffer(tmp, 0);
+
+            convert_video_frame(frame, tmp);
+
+            write_frame(writer->output_context, writer->video_encoder, writer->output_context->streams[stNum], tmp, pkt);
+
+            av_frame_free(&tmp);
+
+            writer->latest_video_pts += 1;
+        }
+        else
+        {
+            frame->pts = writer->latest_audio_pts;
+            write_frame(writer->output_context, writer->audio_encoder, writer->output_context->streams[stNum], frame, pkt);
+            writer->latest_audio_pts += frame->nb_samples;
+        }
+
+        av_frame_free(&frame);
+    }    
+
+    return 0;
 }
