@@ -226,11 +226,23 @@ int sw_write_frames(StreamWriter* writer, enum AVMediaType type, AVFrame* frames
     int stNum = get_stream_number(writer->output_context, type);
 
     AVFrame* frame = frames;
+
+    static struct SwsContext* sws_ctx = NULL;
+    if (type == AVMEDIA_TYPE_VIDEO)
+    {
+        sws_ctx = sws_getContext(frame->width, frame->height, frame->format,
+            writer->video_encoder->width, writer->video_encoder->height, writer->video_encoder->pix_fmt,
+            SWS_BICUBIC, NULL, NULL, NULL);
+
+        if (!sws_ctx) {
+            return -1;
+        }
+    }    
+
     for (int i = 0; i < nb_frames; i++)
     {
         if (type == AVMEDIA_TYPE_VIDEO)
         {
-            // Temporary fix,somehow,video files
             AVFrame* tmp = av_frame_alloc();
             if (!tmp) {
                 fprintf(stderr, "Could not allocate video frame\n");
@@ -243,7 +255,13 @@ int sw_write_frames(StreamWriter* writer, enum AVMediaType type, AVFrame* frames
 
             av_frame_get_buffer(tmp, 0);
 
-            convert_video_frame(frame, tmp);
+            sws_scale(sws_ctx,
+                frame->data,
+                frame->linesize,
+                0,
+                frame->height,
+                tmp->data,
+                tmp->linesize);
 
             write_frame(writer->output_context, writer->video_encoder, writer->output_context->streams[stNum], tmp, pkt);
 
@@ -258,8 +276,13 @@ int sw_write_frames(StreamWriter* writer, enum AVMediaType type, AVFrame* frames
             writer->latest_audio_pts += frame->nb_samples;
         }
 
-        av_frame_free(&frame);
-    }    
+        frame += (int)sizeof(AVFrame);
+    }
+
+    if (sws_ctx != NULL)
+    {
+        sws_freeContext(sws_ctx);
+    }
 
     return 0;
 }
