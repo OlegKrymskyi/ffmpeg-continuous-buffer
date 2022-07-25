@@ -169,3 +169,15 @@ int sr_free_reader(StreamReader** reader)
 
     *reader = NULL;
 }
+
+float sr_get_number_of_video_frames_per_second(StreamReader* reader)
+{
+    if (reader->video_decoder == NULL)
+    {
+        return -1;
+    }
+
+    AVStream* stream = reader->input_context->streams[reader->video_stream_index];
+
+    return stream->avg_frame_rate.num / (float)stream->avg_frame_rate.den;
+}

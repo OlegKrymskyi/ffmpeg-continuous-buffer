@@ -22,3 +22,5 @@ StreamReader* sr_open_desktop();
 int sr_read_stream(StreamReader* reader, int (*callback)(AVFrame* frame, enum AVMediaType type, int64_t pts_time));
 
 int sr_free_reader(StreamReader** reader);
+
+float sr_get_number_of_video_frames_per_second(StreamReader* reader);
