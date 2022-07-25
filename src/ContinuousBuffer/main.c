@@ -22,7 +22,7 @@ int read_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
         videoFrameCounter++;
     }
 
-    if (videoFrameCounter == 60 * 30)
+    if (videoFrameCounter == 10 * 30)
     {
         cb_flush_to_file(buffer, "C:/temp/replay-buf.mp4", NULL);
 
@@ -35,9 +35,9 @@ int read_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 
 int main()
 {
-    const char* src_filename = "C:/temp/game11.mp4";
+    reader = sr_open_desktop();
 
-    reader = sr_open_stream(src_filename);
+    float fps = sr_get_number_of_video_frames_per_second(reader);
 
     buffer = cb_allocate_buffer(10000);
 

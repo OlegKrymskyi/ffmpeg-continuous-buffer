@@ -326,7 +326,7 @@ int cb_add_video_stream(
     if (!c) {
         fprintf(stderr, "Could not allocate video codec context\n");
         return -1;
-    }
+    }    
 
     /* put sample parameters */
     c->bit_rate = buffer->video->bit_rate;
