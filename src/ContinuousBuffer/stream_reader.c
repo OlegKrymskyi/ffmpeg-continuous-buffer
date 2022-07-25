@@ -45,14 +45,14 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
     return 0;
 }
 
-StreamReader* sr_open_stream(const char* input)
+StreamReader* sr_open_stream_from_format(const char* input, AVInputFormat* format)
 {
-	StreamReader* reader = av_mallocz(sizeof(StreamReader));
+    StreamReader* reader = av_mallocz(sizeof(StreamReader));
 
     AVFormatContext* inputFormat = NULL;
     /* open input file, and allocate format context */
-    if (avformat_open_input(&inputFormat, input, NULL, NULL) < 0) {
-        fprintf(stderr, "Could not open source file %s\n", input);
+    if (avformat_open_input(&inputFormat, "desktop", format, NULL) < 0) {
+        fprintf(stderr, "Could not desktop\n");
         av_free(inputFormat);
         return NULL;
     }
@@ -82,6 +82,31 @@ StreamReader* sr_open_stream(const char* input)
 
     /* dump input information to stderr */
     av_dump_format(reader->input_context, 0, input, 0);
+
+    return reader;
+}
+
+StreamReader* sr_open_desktop()
+{
+    avdevice_register_all();
+
+    AVInputFormat* format = av_find_input_format("gdigrab");
+
+    if (format == NULL)
+    {
+        format = av_find_input_format("dshow");
+    }
+
+    StreamReader* reader = sr_open_stream_from_format("desktop", format);
+
+    av_free(format);
+
+    return reader;
+}
+
+StreamReader* sr_open_stream(const char* input)
+{
+    StreamReader* reader = sr_open_stream_from_format(input, NULL);
 
     return reader;
 }
