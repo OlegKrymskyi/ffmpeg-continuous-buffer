@@ -22,9 +22,9 @@ int read_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
         videoFrameCounter++;
     }
 
-    if (videoFrameCounter == 10 * 30)
+    if (videoFrameCounter == 15 * 30)
     {
-        cb_flush_to_file(buffer, "C:/temp/replay-buf.mp4", NULL);
+        cb_flush_to_file(buffer, "C:/temp/desktop-buf.mp4", NULL);
 
         // Finish file reading and exit the program
         return -1;
@@ -43,7 +43,11 @@ int main()
 
     if (reader->video_decoder != NULL)
     {
-        buffer->video = cb_allocate_stream_buffer_from_decoder(reader->input_context, reader->video_decoder, reader->video_stream_index, buffer->duration);
+        AVRational time_base;
+        time_base.den = 30;
+        time_base.num = 1;
+        buffer->video = cb_allocate_video_buffer(time_base, AV_CODEC_ID_H264, 0, 
+            reader->video_decoder->width, reader->video_decoder->height, AV_PIX_FMT_YUV420P, buffer->duration);
     }
 
     if (reader->audio_decoder != NULL)

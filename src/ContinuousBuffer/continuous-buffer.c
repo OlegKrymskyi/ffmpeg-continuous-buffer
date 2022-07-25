@@ -237,8 +237,15 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
         av_write_trailer(outputFormat);
     }    
 
-    avcodec_free_context(&videoCodecCtx);
-    avcodec_free_context(&audioCodecCtx);
+    if (buffer->video != NULL)
+    {
+        avcodec_free_context(&videoCodecCtx);
+    }
+
+    if (buffer->audio != NULL)
+    {
+        avcodec_free_context(&audioCodecCtx);
+    }
 
     if (!(fmt->flags & AVFMT_NOFILE))
         /* Close the output file. */
