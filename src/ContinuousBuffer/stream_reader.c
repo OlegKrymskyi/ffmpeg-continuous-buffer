@@ -51,8 +51,8 @@ StreamReader* sr_open_stream_from_format(const char* input, AVInputFormat* forma
 
     AVFormatContext* inputFormat = NULL;
     /* open input file, and allocate format context */
-    if (avformat_open_input(&inputFormat, "desktop", format, NULL) < 0) {
-        fprintf(stderr, "Could not desktop\n");
+    if (avformat_open_input(&inputFormat, input, format, NULL) < 0) {
+        fprintf(stderr, "Could not find %s\n", input);
         av_free(inputFormat);
         return NULL;
     }
@@ -98,6 +98,24 @@ StreamReader* sr_open_desktop()
     }
 
     StreamReader* reader = sr_open_stream_from_format("desktop", format);
+
+    av_free(format);
+
+    return reader;
+}
+
+StreamReader* sr_open_speaker()
+{
+    avdevice_register_all();
+
+    AVInputFormat* format = av_find_input_format("dshow");
+
+    if (format == NULL)
+    {
+        format = av_find_input_format("dshow");
+    }
+
+    StreamReader* reader = sr_open_stream_from_format("audio=\"Stereo Mix(Realtek(R) Audio)\"", format);
 
     av_free(format);
 
