@@ -60,6 +60,9 @@ int read_audio_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 
 int main()
 {
+    avdevice_register_all();
+    get_devices_list(AVMEDIA_TYPE_AUDIO);
+
     //desktopReader = sr_open_desktop();
     speakerReader = sr_open_speaker();
 

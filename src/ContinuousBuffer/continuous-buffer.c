@@ -182,7 +182,7 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
     avformat_alloc_output_context2(&outputFormat, NULL, format, output);
     if (!outputFormat) {
         fprintf(stderr, "Could not decode output format from file extension: using FLV.\n");
-        avformat_alloc_output_context2(outputFormat, NULL, "flv", output);
+        avformat_alloc_output_context2(&outputFormat, NULL, "flv", output);
     }
     if (!outputFormat)
     {

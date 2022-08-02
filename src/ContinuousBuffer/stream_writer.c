@@ -11,7 +11,7 @@ StreamWriter* sw_allocate_writer(const char* output, const char* format)
     avformat_alloc_output_context2(&outputFormat, NULL, format, output);
     if (!outputFormat) {
         fprintf(stderr, "Could not decode output format from file extension: using FLV.\n");
-        avformat_alloc_output_context2(outputFormat, NULL, "flv", output);
+        avformat_alloc_output_context2(&outputFormat, NULL, "flv", output);
     }
     if (!outputFormat)
     {

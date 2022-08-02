@@ -272,3 +272,24 @@ int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_n
     av_frame_free(&tmp);
     av_packet_free(&pkt);
 }
+
+int get_devices_list(enum AVMediaType type)
+{
+    AVDeviceInfoList* device_list = NULL;
+    AVInputFormat* format = av_find_input_format("dshow");
+    avdevice_list_input_sources(format, NULL, NULL, &device_list);
+
+    if (device_list && device_list->nb_devices > 0)
+    {
+        for (int i = 0; i < device_list->nb_devices; i++)
+        {
+            if (*device_list->devices[i]->media_types == type)
+            {
+                fprintf(stdout, "Device %s\n", device_list->devices[i]->device_name);
+            }
+        }
+        avdevice_free_list_devices(device_list);
+    }
+    
+    return 0;
+}

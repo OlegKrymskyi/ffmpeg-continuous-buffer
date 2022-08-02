@@ -6,6 +6,7 @@
 
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavdevice/avdevice.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/common.h>
 #include <libavutil/frame.h>
@@ -29,3 +30,5 @@ AVFrame* copy_frame(AVFrame* src);
 int convert_video_frame(AVFrame* src, AVFrame* dest);
 
 int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_name);
+
+int get_devices_list(enum AVMediaType type);

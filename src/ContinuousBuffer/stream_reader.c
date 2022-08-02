@@ -115,7 +115,7 @@ StreamReader* sr_open_speaker()
         format = av_find_input_format("dshow");
     }
 
-    StreamReader* reader = sr_open_stream_from_format("audio=\"Stereo Mix(Realtek(R) Audio)\"", format);
+    StreamReader* reader = sr_open_stream_from_format("audio=Stereo Mix (Realtek(R) Audio)", format);
 
     av_free(format);
 
