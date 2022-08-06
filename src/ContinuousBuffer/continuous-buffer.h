@@ -12,6 +12,7 @@
 #include <libavutil/fifo.h>
 
 #include "utils.h"
+#include "stream-writer.h"
 
 typedef struct ContinuousBufferStream {
 
@@ -69,3 +70,5 @@ int64_t cb_pop_all_frames(ContinuousBuffer* buffer, enum AVMediaType type, AVFra
 ContinuousBuffer* cb_allocate_buffer(int64_t maxDuration);
 
 int64_t cb_get_buffer_stream_duration(ContinuousBufferStream* buffer);
+
+int cb_flush_to_writer(ContinuousBuffer* buffer, StreamWriter* writer);

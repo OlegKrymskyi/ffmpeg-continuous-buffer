@@ -348,3 +348,14 @@ AVDeviceInfoList* get_devices_list(const char* format)
 
     return device_list;
 }
+
+int free_frames(AVFrame* frames, int64_t nb_frames)
+{
+    AVFrame* frame = NULL;
+    for (int i = 0; i < nb_frames; i++)
+    {
+        frame = frames;
+        av_frame_free(&frame);
+        frames++;
+    }
+}

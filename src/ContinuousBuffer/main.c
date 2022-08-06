@@ -52,10 +52,7 @@ int read_audio_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 
     if (audioFrameCounter >= 44100*5)
     {
-        AVFrame* frames = NULL;
-        int64_t nb_frames = cb_pop_all_frames(buffer, AVMEDIA_TYPE_AUDIO, &frames);
-
-        sw_write_frames(audioWriter, AVMEDIA_TYPE_AUDIO, frames, nb_frames);
+        cb_flush_to_writer(buffer, audioWriter);
 
         // Finish file reading and exit the program
         return -1;

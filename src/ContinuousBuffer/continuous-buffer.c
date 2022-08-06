@@ -273,151 +273,6 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
     return 0;
 }
 
-int cb_add_video_stream(
-    ContinuousBuffer* buffer,
-    AVFormatContext* outputFormat,
-    AVCodec** codec,
-    AVCodecContext** codecContext)
-{
-    AVCodecContext* c = NULL;
-
-    /* find the encoder */
-    *codec = avcodec_find_encoder(buffer->video->codec);
-    if (!(*codec)) {
-        fprintf(stderr, "Could not find encoder for '%s'\n",
-            avcodec_get_name(buffer->video->codec));
-        return -1;
-    }
-
-    AVStream* st = avformat_new_stream(outputFormat, NULL);
-    if (st == NULL) {
-        fprintf(stderr, "Could not allocate stream\n");
-        return -1;
-    }
-
-    st->id = outputFormat->nb_streams - 1;
-
-    c = avcodec_alloc_context3(*codec);
-    if (!c) {
-        fprintf(stderr, "Could not allocate video codec context\n");
-        return -1;
-    }    
-
-    /* put sample parameters */
-    c->bit_rate = buffer->video->bit_rate;
-    /* resolution must be a multiple of two */
-    c->width = buffer->video->width;
-    c->height = buffer->video->height;
-    /* frames per second */
-    c->time_base = buffer->video->time_base;
-    c->framerate = (AVRational){ buffer->video->time_base.den, buffer->video->time_base.num };
-
-    st->time_base = c->time_base;
-
-    /* emit one intra frame every ten frames
-     * check frame pict_type before passing frame
-     * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
-     * then gop_size is ignored and the output of encoder
-     * will always be I frame irrespective to gop_size
-     */
-    c->gop_size = 10;
-    c->max_b_frames = 1;
-    c->pix_fmt = buffer->video->pixel_format;
-
-    if (buffer->video->codec == AV_CODEC_ID_H264)
-        av_opt_set(c->priv_data, "preset", "slow", 0);
-
-    /* open it */
-    if (avcodec_open2(c, *codec, NULL) < 0) {
-        fprintf(stderr, "Could not open codec\n");
-        return -1;
-    }
-
-    /* Some formats want stream headers to be separate. */
-    if (outputFormat->oformat->flags & AVFMT_GLOBALHEADER)
-        c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
-    avcodec_parameters_from_context(st->codecpar, c);
-
-    *codecContext = c;
-
-    return 0;
-}
-
-int cb_add_audio_stream(
-    ContinuousBuffer* buffer,
-    AVFormatContext* outputFormat,
-    AVCodec** codec,
-    AVCodecContext** codecContext)
-{
-    AVCodecContext* c = NULL;
-
-    /* find the encoder */
-    *codec = avcodec_find_encoder(buffer->audio->codec);
-    if (!(*codec)) {
-        fprintf(stderr, "Could not find encoder for '%s'\n",
-            avcodec_get_name(buffer->audio->codec));
-        return -1;
-    }
-
-    AVStream* st = avformat_new_stream(outputFormat, NULL);
-    if (st == NULL) {
-        fprintf(stderr, "Could not allocate stream\n");
-        return -1;
-    }
-
-    st->id = outputFormat->nb_streams - 1;
-
-    c = avcodec_alloc_context3(*codec);
-    if (!c) {
-        fprintf(stderr, "Could not allocate video codec context\n");
-        return -1;
-    }
-
-    /* put sample parameters */
-    c->bit_rate = buffer->audio->bit_rate;
-
-    /* check that the encoder supports s16 pcm input */
-    c->sample_fmt = buffer->audio->sample_fmt;
-    if (!check_sample_fmt(*codec, c->sample_fmt)) {
-        fprintf(stderr, "Encoder does not support sample format %s",
-            av_get_sample_fmt_name(c->sample_fmt));
-        return -1;
-    }
-
-    /* select other audio parameters supported by the encoder */
-    c->sample_rate = select_sample_rate(*codec);
-    if (buffer->audio->channel_layout > 0)
-    {        
-        c->channel_layout = buffer->audio->channel_layout;
-    }
-    else 
-    {
-        c->channel_layout = select_channel_layout(*codec);
-        c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
-    }
-
-    c->frame_size = buffer->audio->frame_size;
-
-    /* open it */
-    if (avcodec_open2(c, *codec, NULL) < 0) {
-        fprintf(stderr, "Could not open codec\n");
-        return -1;
-    }
-
-    /* Some formats want stream headers to be separate. */
-    if (outputFormat->oformat->flags & AVFMT_GLOBALHEADER)
-        c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
-    *codecContext = c;
-
-    st->time_base = (AVRational){ 1, c->sample_rate };
-
-    avcodec_parameters_from_context(st->codecpar, c);
-
-    return 0;
-}
-
 int cb_is_empty(ContinuousBuffer* buffer) 
 {
     if (buffer->audio != NULL && av_fifo_size(buffer->audio->queue) > 0)
@@ -440,4 +295,31 @@ ContinuousBuffer* cb_allocate_buffer(int64_t maxDuration)
     buffer->duration = maxDuration;
 
     return buffer;
+}
+
+int cb_flush_to_writer(ContinuousBuffer* buffer, StreamWriter* writer)
+{
+    int64_t nb_frames;
+    if (buffer->video != NULL && writer->video_encoder != NULL)
+    {
+        AVFrame* frames = NULL;
+        nb_frames = cb_pop_all_frames(buffer, AVMEDIA_TYPE_VIDEO, &frames);
+        if (nb_frames > 0)
+        {
+            sw_write_frames(writer, AVMEDIA_TYPE_VIDEO, frames, nb_frames);
+            free_frames(frames, nb_frames);
+            av_free(frames);
+        }
+    }
+    if (buffer->audio != NULL && writer->audio_encoder != NULL)
+    {
+        AVFrame* frames = NULL;
+        nb_frames = cb_pop_all_frames(buffer, AVMEDIA_TYPE_AUDIO, &frames);
+        if (nb_frames > 0)
+        {
+            sw_write_frames(writer, AVMEDIA_TYPE_AUDIO, frames, nb_frames);
+            free_frames(frames, nb_frames);
+        }
+    }
+    return 0;
 }
