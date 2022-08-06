@@ -330,11 +330,16 @@ int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_n
     av_packet_free(&pkt);
 }
 
-AVDeviceInfoList* get_devices_list()
+AVDeviceInfoList* get_devices_list(const char* format)
 {
     AVDeviceInfoList* device_list = NULL;
-    AVInputFormat* format = av_find_input_format("dshow");
-    avdevice_list_input_sources(format, NULL, NULL, &device_list);
+    AVInputFormat* iformat = av_find_input_format(format);
+    if (iformat == NULL)
+    {
+        return NULL;
+    }
+
+    avdevice_list_input_sources(iformat, NULL, NULL, &device_list);
 
     if (!device_list || device_list->nb_devices == 0)
     {

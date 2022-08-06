@@ -62,8 +62,6 @@ int cb_push_frame(ContinuousBuffer* buffer, AVFrame* frame, enum AVMediaType typ
 
 int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64_t maxDuration);
 
-int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* format);
-
 int cb_is_empty(ContinuousBuffer* buffer);
 
 int64_t cb_pop_all_frames(ContinuousBuffer* buffer, enum AVMediaType type, AVFrame** frames);

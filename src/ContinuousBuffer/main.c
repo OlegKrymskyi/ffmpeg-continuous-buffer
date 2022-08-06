@@ -29,8 +29,6 @@ int read_video_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 
     if (videoFrameCounter == 15 * 30)
     {
-        cb_flush_to_file(buffer, "C:/temp/desktop-buf.mp4", NULL);
-
         // Finish file reading and exit the program
         return -1;
     }
@@ -69,7 +67,7 @@ int read_audio_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 int main()
 {
     avdevice_register_all();
-    get_devices_list();
+    get_devices_list("dshow");
 
     speakerReader = sr_open_speaker();
     audioWriter = sw_allocate_writer("C:/temp/speakers-buf.mp4", NULL);

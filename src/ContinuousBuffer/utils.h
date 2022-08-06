@@ -35,4 +35,4 @@ int convert_audio_frame(AVFrame* src, AVFrame* dest);
 
 int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_name);
 
-AVDeviceInfoList* get_devices_list();
+AVDeviceInfoList* get_devices_list(const char* format);
