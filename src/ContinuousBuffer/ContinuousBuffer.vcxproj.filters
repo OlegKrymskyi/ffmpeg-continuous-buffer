@@ -24,10 +24,10 @@
     <ClCompile Include="utils.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="stream_reader.c">
+    <ClCompile Include="stream-reader.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="stream_writer.c">
+    <ClCompile Include="stream-writer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -38,10 +38,10 @@
     <ClInclude Include="utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="stream_reader.h">
+    <ClInclude Include="stream-reader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="stream_writer.h">
+    <ClInclude Include="stream-writer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

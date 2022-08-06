@@ -32,6 +32,7 @@ typedef struct ContinuousBufferStream {
     int channel_layout;
     enum AVSampleFormat sample_fmt;
     int nb_samples;
+    int frame_size;
 
 } ContinuousBufferStream;
 
@@ -46,14 +47,14 @@ typedef struct ContinuousBuffer {
 
 int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContext* inputFormat, enum AVMediaType type);
 
-ContinuousBufferStream* cb_allocate_video_buffer(AVRational time_base, enum AVCodecID codec, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format, int64_t duration);
+ContinuousBufferStream* cb_allocate_video_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codec, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format);
 
-ContinuousBufferStream* cb_allocate_audio_buffer(AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout, 
-    enum AVSampleFormat sample_fmt, int frame_size, int64_t duration);
+ContinuousBufferStream* cb_allocate_audio_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout,
+    enum AVSampleFormat sample_fmt, int frame_size);
 
 ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, int64_t duration);
 
-ContinuousBufferStream* cb_allocate_stream_buffer_from_decoder(AVFormatContext* inputFormat, AVCodecContext* decoder, int streamIndex, int64_t duration);
+ContinuousBufferStream* cb_allocate_stream_buffer_from_decoder(ContinuousBuffer* buffer, AVFormatContext* inputFormat, AVCodecContext* decoder, int streamIndex);
 
 int cb_free_buffer(ContinuousBuffer** buffer);
 
@@ -64,6 +65,8 @@ int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64
 int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* format);
 
 int cb_is_empty(ContinuousBuffer* buffer);
+
+int64_t cb_pop_all_frames(ContinuousBuffer* buffer, enum AVMediaType type, AVFrame** frames);
 
 ContinuousBuffer* cb_allocate_buffer(int64_t maxDuration);
 

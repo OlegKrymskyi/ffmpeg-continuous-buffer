@@ -4,10 +4,13 @@
 
 #include "utils.h"
 #include "continuous-buffer.h"
-#include "stream_reader.h"
+#include "stream-reader.h"
+#include "stream-writer.h"
 
-StreamReader* desktopReader;
+#define OUTPUT_BIT_RATE 96000
+
 StreamReader* speakerReader;
+StreamWriter* audioWriter;
 ContinuousBuffer* buffer;
 int videoFrameCounter = 0;
 int audioFrameCounter = 0;
@@ -37,19 +40,24 @@ int read_video_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 
 int read_audio_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 {
+    if (type != AVMEDIA_TYPE_AUDIO)
+    {
+        return 0;
+    }
+
     if (cb_push_frame(buffer, frame, type) < 0)
     {
         return -1;
     }
 
-    if (type == AVMEDIA_TYPE_AUDIO)
-    {
-        audioFrameCounter += frame->nb_samples;
-    }
+    audioFrameCounter += frame->nb_samples;
 
-    if (audioFrameCounter == 1000)
+    if (audioFrameCounter >= 44100*5)
     {
-        cb_flush_to_file(buffer, "C:/temp/skeapers-buf.mp3", NULL);
+        AVFrame* frames = NULL;
+        int64_t nb_frames = cb_pop_all_frames(buffer, AVMEDIA_TYPE_AUDIO, &frames);
+
+        sw_write_frames(audioWriter, AVMEDIA_TYPE_AUDIO, frames, nb_frames);
 
         // Finish file reading and exit the program
         return -1;
@@ -61,29 +69,35 @@ int read_audio_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 int main()
 {
     avdevice_register_all();
-    get_devices_list(AVMEDIA_TYPE_AUDIO);
+    get_devices_list();
 
-    //desktopReader = sr_open_desktop();
     speakerReader = sr_open_speaker();
+    audioWriter = sw_allocate_writer("C:/temp/speakers-buf.mp4", NULL);
 
-    buffer = cb_allocate_buffer(10000);
+    sw_allocate_audio_stream(audioWriter, 
+        AV_CODEC_ID_AAC, 
+        speakerReader->audio_decoder->bit_rate, 
+        speakerReader->audio_decoder->sample_rate, 
+        av_get_default_channel_layout(2), 
+        AV_SAMPLE_FMT_FLTP);
 
-    /*if (desktopReader->video_decoder != NULL)
-    {
-        AVRational time_base;
-        time_base.den = 30;
-        time_base.num = 1;
-        buffer->video = cb_allocate_video_buffer(time_base, AV_CODEC_ID_H264, 0, 
-            desktopReader->video_decoder->width, desktopReader->video_decoder->height, AV_PIX_FMT_YUV420P, buffer->duration);
-    }*/
+    sw_open_writer(audioWriter);
 
-    if (speakerReader->audio_decoder != NULL)
-    {
-        buffer->audio = cb_allocate_stream_buffer_from_decoder(speakerReader->input_context, speakerReader->audio_decoder, speakerReader->audio_stream_index, buffer->duration);
-    }
+    buffer = cb_allocate_buffer(5000);
+
+    cb_allocate_audio_buffer(
+        buffer,
+        speakerReader->audio_decoder->time_base,
+        speakerReader->audio_decoder->codec_id,
+        speakerReader->audio_decoder->sample_rate,
+        OUTPUT_BIT_RATE,
+        av_get_default_channel_layout(2),
+        speakerReader->audio_decoder->sample_fmt,
+        speakerReader->audio_decoder->frame_size);
 
     sr_read_stream(speakerReader, read_audio_frame);
 
     cb_free_buffer(&buffer);
-    sr_free_reader(&desktopReader);
+    sr_free_reader(&speakerReader);
+    sw_close_writer(&audioWriter);
 }

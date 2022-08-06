@@ -1,4 +1,4 @@
-#include "stream_reader.h"
+#include "stream-reader.h"
 #include "utils.h"
 
 static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* frame, int (*callback)(AVFrame* frame, enum AVMediaType type, int64_t pts_time))

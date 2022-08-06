@@ -12,6 +12,27 @@ int check_sample_fmt(const AVCodec* codec, enum AVSampleFormat sample_fmt)
     return 0;
 }
 
+int select_channel_layout(const AVCodec* codec)
+{
+    const int* p, * best_ch_layout;
+    int best_nb_channels = 0;
+
+    if (!codec->channel_layouts)
+        return AV_CH_LAYOUT_STEREO;
+
+    p = codec->channel_layouts;
+    while (p) {
+        int nb_channels = av_get_channel_layout_nb_channels(*p);
+
+        if (nb_channels > best_nb_channels) {
+            best_ch_layout = p;
+            best_nb_channels = nb_channels;
+        }
+        p++;
+    }
+    return best_ch_layout;
+}
+
 int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContext* inputFormat, enum AVMediaType type)
 {
     int ret, stream_index;
@@ -148,6 +169,42 @@ AVFrame* copy_frame(AVFrame* src)
     return dest;
 }
 
+int convert_audio_frame(AVFrame* src, AVFrame* dest)
+{
+    int ret = 0;
+    struct SwrContext* swr_ctx = swr_alloc();
+
+    src->channel_layout = av_get_default_channel_layout(src->channels);
+
+    av_opt_set_channel_layout(swr_ctx, "in_channel_layout", src->channel_layout, 0);
+    av_opt_set_channel_layout(swr_ctx, "out_channel_layout", dest->channel_layout, 0);
+    av_opt_set_int(swr_ctx, "in_sample_rate", src->sample_rate, 0);
+    av_opt_set_int(swr_ctx, "out_sample_rate", dest->sample_rate, 0);
+    av_opt_set_sample_fmt(swr_ctx, "in_sample_fmt", src->format, 0);
+    av_opt_set_sample_fmt(swr_ctx, "out_sample_fmt", dest->format, 0);
+    ret = swr_init(swr_ctx);
+    if (ret < 0) {
+        fprintf(stderr, "Error sending a frame to the encoder: %s\n", av_err2str(ret));
+        return ret;
+    }
+
+    ret = swr_config_frame(swr_ctx, dest, src);
+    if (ret < 0) {
+        fprintf(stderr, "Error sending a frame to the encoder: %s\n", av_err2str(ret));
+        return ret;
+    }
+
+    ret = swr_convert_frame(swr_ctx, dest, src);
+    if (ret < 0) {
+        fprintf(stderr, "Error sending a frame to the encoder: %s\n", av_err2str(ret));
+        return ret;
+    }
+
+    swr_free(&swr_ctx);
+
+    return 0;
+}
+
 int convert_video_frame(AVFrame* src, AVFrame* dest)
 {
     static struct SwsContext* sws_ctx;
@@ -273,23 +330,16 @@ int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_n
     av_packet_free(&pkt);
 }
 
-int get_devices_list(enum AVMediaType type)
+AVDeviceInfoList* get_devices_list()
 {
     AVDeviceInfoList* device_list = NULL;
     AVInputFormat* format = av_find_input_format("dshow");
     avdevice_list_input_sources(format, NULL, NULL, &device_list);
 
-    if (device_list && device_list->nb_devices > 0)
+    if (!device_list || device_list->nb_devices == 0)
     {
-        for (int i = 0; i < device_list->nb_devices; i++)
-        {
-            if (*device_list->devices[i]->media_types == type)
-            {
-                fprintf(stdout, "Device %s\n", device_list->devices[i]->device_name);
-            }
-        }
-        avdevice_free_list_devices(device_list);
+        avdevice_free_list_devices(&device_list);
     }
-    
-    return 0;
+
+    return device_list;
 }

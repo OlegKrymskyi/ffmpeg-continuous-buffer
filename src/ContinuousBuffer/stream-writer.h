@@ -2,6 +2,8 @@
 
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavutil/avassert.h>
+#include <libavutil/audio_fifo.h>
 
 typedef struct StreamWriter {
 
@@ -27,4 +29,4 @@ int sw_write_frames(StreamWriter* writer, enum AVMediaType type, AVFrame* frames
 
 int sw_open_writer(StreamWriter* writer);
 
-int sw_close_writer(StreamWriter** reader);
+int sw_close_writer(StreamWriter** writer);

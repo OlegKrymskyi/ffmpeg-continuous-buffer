@@ -20,6 +20,8 @@ int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContex
 
 int select_sample_rate(const AVCodec* codec);
 
+int select_channel_layout(const AVCodec* codec);
+
 int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
     AVStream* st, AVFrame* frame, AVPacket* pkt);
 
@@ -29,6 +31,8 @@ AVFrame* copy_frame(AVFrame* src);
 
 int convert_video_frame(AVFrame* src, AVFrame* dest);
 
+int convert_audio_frame(AVFrame* src, AVFrame* dest);
+
 int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_name);
 
-int get_devices_list(enum AVMediaType type);
+AVDeviceInfoList* get_devices_list();

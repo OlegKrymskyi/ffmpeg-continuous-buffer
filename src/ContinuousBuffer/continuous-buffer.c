@@ -1,38 +1,49 @@
 #include "continuous-buffer.h"
 
-ContinuousBufferStream* cb_allocate_video_buffer(AVRational time_base, enum AVCodecID codec, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format, int64_t duration)
+ContinuousBufferStream* cb_allocate_video_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codec, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format)
 {
-    ContinuousBufferStream* buffer = av_mallocz(sizeof(*buffer));
-    buffer->type = AVMEDIA_TYPE_VIDEO;
-    buffer->codec = codec;
-    buffer->width = width;
-    buffer->height = height;
-    buffer->pixel_format = pixel_format;
-    buffer->time_base = time_base;
-    buffer->bit_rate = bit_rate;
+    ContinuousBufferStream* buffer_stream = av_mallocz(sizeof(ContinuousBufferStream));
+    buffer_stream->type = AVMEDIA_TYPE_VIDEO;
+    buffer_stream->codec = codec;
+    buffer_stream->width = width;
+    buffer_stream->height = height;
+    buffer_stream->pixel_format = pixel_format;
+    buffer_stream->time_base = time_base;
+    buffer_stream->bit_rate = bit_rate;
 
-    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration / 1000, sizeof(AVFrame));
+    buffer_stream->queue = av_fifo_alloc_array((size_t)time_base.den * buffer->duration / 1000, sizeof(AVFrame));
     return buffer;
 }
 
-ContinuousBufferStream* cb_allocate_audio_buffer(AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout, 
-    enum AVSampleFormat sample_fmt, int frame_size, int64_t duration)
+ContinuousBufferStream* cb_allocate_audio_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout,
+    enum AVSampleFormat sample_fmt, int frame_size)
 {
-    ContinuousBufferStream* buffer = av_mallocz(sizeof(*buffer));
-    buffer->type = AVMEDIA_TYPE_AUDIO;
-    buffer->codec = codec;
-    buffer->sample_rate = sample_rate;
-    buffer->bit_rate = bit_rate;
-    buffer->channel_layout = channel_layout;
-    buffer->time_base = time_base;
-    buffer->sample_fmt = sample_fmt;
+    // Set the default frame size if it was not determined. 
+    // And the grow the queue during the buffering
+    if (frame_size == 0)
+    {
+        frame_size = sample_rate / av_get_channel_layout_nb_channels(channel_layout);
+    }
 
-    buffer->queue = av_fifo_alloc_array((size_t)time_base.den * duration / ((size_t)frame_size * 1000), sizeof(AVFrame));
+    ContinuousBufferStream* buffer_stream = av_mallocz(sizeof(ContinuousBufferStream));
+    buffer_stream->type = AVMEDIA_TYPE_AUDIO;
+    buffer_stream->codec = codec;
+    buffer_stream->sample_rate = sample_rate;
+    buffer_stream->bit_rate = bit_rate;
+    buffer_stream->channel_layout = channel_layout;
+    buffer_stream->time_base = time_base;
+    buffer_stream->sample_fmt = sample_fmt;
+    buffer_stream->frame_size = frame_size;
+
+    size_t queue_length = (size_t)time_base.den * buffer->duration / ((size_t)frame_size * 1000);
+    buffer_stream->queue = av_fifo_alloc_array(queue_length, sizeof(AVFrame));
+
+    buffer->audio = buffer_stream;
 
     return buffer;
 }
 
-ContinuousBufferStream* cb_allocate_stream_buffer_from_decoder(AVFormatContext* inputFormat, AVCodecContext* decoder, int streamIndex, int64_t duration)
+ContinuousBufferStream* cb_allocate_stream_buffer_from_decoder(ContinuousBuffer* buffer, AVFormatContext* inputFormat, AVCodecContext* decoder, int streamIndex)
 {
     if (decoder->codec->type == AVMEDIA_TYPE_VIDEO)
     {
@@ -40,25 +51,25 @@ ContinuousBufferStream* cb_allocate_stream_buffer_from_decoder(AVFormatContext* 
         time_base.den = inputFormat->streams[streamIndex]->avg_frame_rate.num;
         time_base.num = inputFormat->streams[streamIndex]->avg_frame_rate.den;
         return cb_allocate_video_buffer(
+            buffer,
             time_base,
             decoder->codec_id,
             decoder->bit_rate,
             decoder->width,
             decoder->height,
-            decoder->pix_fmt,
-            duration);
+            decoder->pix_fmt);
     }
     else if (decoder->codec->type == AVMEDIA_TYPE_AUDIO)
     {
         return cb_allocate_audio_buffer(
+            buffer,
             inputFormat->streams[streamIndex]->time_base,
             decoder->codec_id,
             decoder->sample_rate,
             decoder->bit_rate,
             decoder->channel_layout,
             decoder->sample_fmt,
-            decoder->frame_size,
-            duration);
+            decoder->frame_size);
     }
 
     return NULL;
@@ -76,7 +87,7 @@ ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, i
     AVCodecContext* videoDecCtx = NULL;
     if (open_codec_context(&videoStreamIdx, &videoDecCtx, inputFormat, AVMEDIA_TYPE_VIDEO) >= 0)
     {
-        buffer ->video = cb_allocate_stream_buffer_from_decoder(inputFormat, videoDecCtx, videoStreamIdx, duration);
+        cb_allocate_stream_buffer_from_decoder(buffer, inputFormat, videoDecCtx, videoStreamIdx, duration);
         avcodec_free_context(&videoDecCtx);
     }
 
@@ -84,7 +95,7 @@ ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, i
     AVCodecContext* audioDecCtx = NULL;
     if (open_codec_context(&audioStreamIdx, &audioDecCtx, inputFormat, AVMEDIA_TYPE_AUDIO) >= 0)
     {
-        buffer->audio = cb_allocate_stream_buffer_from_decoder(inputFormat, audioDecCtx, audioStreamIdx, duration);
+        cb_allocate_stream_buffer_from_decoder(inputFormat, audioDecCtx, audioStreamIdx, duration);
         avcodec_free_context(&audioDecCtx);
     }
 
@@ -128,10 +139,15 @@ int cb_push_frame(ContinuousBuffer* buffer, AVFrame* frame, enum AVMediaType typ
 
 int64_t cb_get_buffer_stream_duration(ContinuousBufferStream* buffer)
 {
-    double duration = av_q2d(buffer->time_base) * av_fifo_size(buffer->queue) / sizeof(AVFrame);
-    if (buffer->type == AVMEDIA_TYPE_AUDIO)
+    double duration = 0;
+    int64_t nb_frames = av_fifo_size(buffer->queue) / sizeof(AVFrame);
+    if (buffer->type == AVMEDIA_TYPE_VIDEO)
     {
-        duration = duration * buffer->nb_samples;
+        duration = nb_frames * buffer->time_base.num / (double)buffer->time_base.den;
+    }
+    else if (buffer->type == AVMEDIA_TYPE_AUDIO)
+    {
+        duration = buffer->nb_samples * (int64_t)buffer->time_base.num / (double)buffer->time_base.den;
     }
 
     return duration * 1000;
@@ -163,12 +179,12 @@ int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64
     }
 
     AVFrame* cloneFrame = copy_frame(frame);
-    int ret = av_fifo_generic_write(buffer->queue, cloneFrame, sizeof(AVFrame), NULL);
-    if (ret == 0)
+    if (av_fifo_generic_write(buffer->queue, cloneFrame, sizeof(AVFrame), NULL) > 0)
     {
         buffer->nb_samples += frame->nb_samples;
     }
-    return ret;
+
+    return 0;
 }
 
 int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* format)
@@ -257,6 +273,35 @@ int cb_flush_to_file(ContinuousBuffer* buffer, const char* output, const char* f
     return ret;
 }
 
+static int64_t cb_pop_all_frames_internal(AVFifoBuffer* queue, AVFrame** frames)
+{
+    if (av_fifo_size(queue) == 0)
+    {
+        return 0;
+    }
+
+    int64_t nb_frames = av_fifo_size(queue) / sizeof(AVFrame);
+
+    *frames = av_mallocz(sizeof(AVFrame) * nb_frames);
+    av_fifo_generic_read(queue, *frames, av_fifo_size(queue), NULL);
+
+    return nb_frames;
+}
+
+int64_t cb_pop_all_frames(ContinuousBuffer* buffer, enum AVMediaType type, AVFrame** frames)
+{
+    if (type == AVMEDIA_TYPE_VIDEO && buffer->video != NULL)
+    {
+        return cb_pop_all_frames_internal(buffer->video->queue, frames);
+    }
+    else if (type == AVMEDIA_TYPE_AUDIO && buffer->audio != NULL)
+    {
+        return cb_pop_all_frames_internal(buffer->audio->queue, frames);
+    }
+
+    return -1;
+}
+
 int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecContext* encoder)
 {
     AVPacket* pkt = av_packet_alloc();
@@ -269,14 +314,15 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
         AVFrame* frame = av_mallocz(sizeof(AVFrame));
         av_fifo_generic_read(queue, frame, sizeof(AVFrame), NULL);
 
+        AVFrame* tmp = av_frame_alloc();
+        if (!tmp) {
+            fprintf(stderr, "Could not allocate video frame\n");
+            return -1;
+        }
+
         if (encoder->codec_type == AVMEDIA_TYPE_VIDEO)
         {
             // Temporary fix,somehow,video files
-            AVFrame* tmp = av_frame_alloc();
-            if (!tmp) {
-                fprintf(stderr, "Could not allocate video frame\n");
-                return -1;
-            }
             tmp->format = encoder->pix_fmt;
             tmp->width = frame->width;
             tmp->height = frame->height;
@@ -287,16 +333,22 @@ int cb_write_queue(AVFifoBuffer* queue, AVFormatContext* outputFormat, AVCodecCo
             convert_video_frame(frame, tmp);
 
             write_frame(outputFormat, encoder, outputFormat->streams[stNum], tmp, pkt);
-            
-            av_frame_free(&tmp);
         }
         else
         {
-            frame->pts = nb_samples;
-            write_frame(outputFormat, encoder, outputFormat->streams[stNum], frame, pkt);
-            nb_samples += frame->nb_samples;
+            // Temporary fix,somehow,video files
+            tmp->channels = encoder->channels;
+            tmp->channel_layout = encoder->channel_layout;
+            tmp->sample_rate = frame->sample_rate;
+            tmp->format = frame->format;
+
+            convert_audio_frame(frame, tmp);
+            tmp->pts = nb_samples;
+            write_frame(outputFormat, encoder, outputFormat->streams[stNum], tmp, pkt);
+            nb_samples += tmp->nb_samples;
         }
 
+        av_frame_free(&tmp);
         av_frame_free(&frame);
     }
 
@@ -416,12 +468,22 @@ int cb_add_audio_stream(
     if (!check_sample_fmt(*codec, c->sample_fmt)) {
         fprintf(stderr, "Encoder does not support sample format %s",
             av_get_sample_fmt_name(c->sample_fmt));
-        exit(1);
+        return -1;
     }
 
     /* select other audio parameters supported by the encoder */
     c->sample_rate = select_sample_rate(*codec);
-    c->channel_layout = buffer->audio->channel_layout;
+    if (buffer->audio->channel_layout > 0)
+    {        
+        c->channel_layout = buffer->audio->channel_layout;
+    }
+    else 
+    {
+        c->channel_layout = select_channel_layout(*codec);
+        c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
+    }
+
+    c->frame_size = buffer->audio->frame_size;
 
     /* open it */
     if (avcodec_open2(c, *codec, NULL) < 0) {
