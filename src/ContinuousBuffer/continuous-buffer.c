@@ -22,6 +22,10 @@ ContinuousBufferStream* cb_allocate_audio_buffer(ContinuousBuffer* buffer, AVRat
     // And the grow the queue during the buffering
     if (frame_size == 0)
     {
+        if (channel_layout == 0)
+        {
+            channel_layout = av_get_default_channel_layout(2);
+        }
         frame_size = sample_rate / av_get_channel_layout_nb_channels(channel_layout);
     }
 

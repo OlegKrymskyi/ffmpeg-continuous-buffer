@@ -80,7 +80,7 @@ int sw_allocate_video_stream(StreamWriter* writer, enum AVCodecID codecId, AVRat
         return -1;
     }
 
-    AVStream* st = avformat_new_stream(writer->output, NULL);
+    AVStream* st = avformat_new_stream(writer->output_context, NULL);
     if (st == NULL) {
         fprintf(stderr, "Could not allocate stream\n");
         return -1;
