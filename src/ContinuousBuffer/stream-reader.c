@@ -86,38 +86,17 @@ StreamReader* sr_open_stream_from_format(const char* input, AVInputFormat* forma
     return reader;
 }
 
-StreamReader* sr_open_desktop()
+StreamReader* sr_open_input(const char* input, const char* format)
 {
-    avdevice_register_all();
-
-    AVInputFormat* format = av_find_input_format("gdigrab");
-
-    if (format == NULL)
+    AVInputFormat* iformat = av_find_input_format(format);
+    if (iformat == NULL)
     {
-        format = av_find_input_format("dshow");
+        return NULL;
     }
 
-    StreamReader* reader = sr_open_stream_from_format("desktop", format);
+    StreamReader* reader = sr_open_stream_from_format(input, iformat);
 
-    av_free(format);
-
-    return reader;
-}
-
-StreamReader* sr_open_speaker()
-{
-    avdevice_register_all();
-
-    AVInputFormat* format = av_find_input_format("dshow");
-
-    if (format == NULL)
-    {
-        format = av_find_input_format("dshow");
-    }
-
-    StreamReader* reader = sr_open_stream_from_format("audio=Stereo Mix (Realtek(R) Audio)", format);
-
-    av_free(format);
+    av_free(iformat);
 
     return reader;
 }

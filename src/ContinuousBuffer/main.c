@@ -66,7 +66,7 @@ int main()
     avdevice_register_all();
     get_devices_list("dshow");
 
-    speakerReader = sr_open_speaker();
+    speakerReader = sr_open_input("audio=Stereo Mix (Realtek(R) Audio)", "dshow");
     audioWriter = sw_allocate_writer("C:/temp/speakers-buf.mp4", NULL);
 
     sw_allocate_audio_stream(audioWriter, 

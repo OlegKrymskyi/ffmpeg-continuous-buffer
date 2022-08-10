@@ -17,9 +17,7 @@ StreamReader* sr_open_stream_from_format(const char* input, AVInputFormat* forma
 
 StreamReader* sr_open_stream(const char* input);
 
-StreamReader* sr_open_desktop();
-
-StreamReader* sr_open_speaker();
+StreamReader* sr_open_input(const char* input, const char* format);
 
 int sr_read_stream(StreamReader* reader, int (*callback)(AVFrame* frame, enum AVMediaType type, int64_t pts_time));
 
