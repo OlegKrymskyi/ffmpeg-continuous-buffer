@@ -312,7 +312,6 @@ int cb_flush_to_writer(ContinuousBuffer* buffer, StreamWriter* writer)
         {
             sw_write_frames(writer, AVMEDIA_TYPE_VIDEO, frames, nb_frames);
             free_frames(frames, nb_frames);
-            av_free(frames);
         }
     }
     if (buffer->audio != NULL && writer->audio_encoder != NULL)

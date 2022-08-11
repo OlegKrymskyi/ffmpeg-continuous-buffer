@@ -21,7 +21,9 @@ StreamWriter* sw_allocate_writer(const char* output, const char* format)
 
     StreamWriter* writer = av_mallocz(sizeof(StreamWriter));
 
-    writer->output = output;
+    writer->output = av_mallocz(strlen(output));
+    strcpy(writer->output, output);
+
     writer->output_context = outputFormat;
 
     return writer;
@@ -371,6 +373,8 @@ static int sw_write_video_frames(StreamWriter* writer, AVFrame* frames, int nb_f
             fprintf(stderr, "sws_scale error: %s\n", av_err2str(ret));
             return -1;
         }
+
+        tmp->pts = writer->latest_video_pts;
 
         ret = write_frame(writer->output_context, writer->video_encoder, writer->output_context->streams[stNum], tmp, pkt);
         if (ret < 0)
