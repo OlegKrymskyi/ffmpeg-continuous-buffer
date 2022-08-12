@@ -29,9 +29,9 @@ StreamWriter* sw_allocate_writer(const char* output, const char* format)
     return writer;
 }
 
-int sw_close_writer(StreamWriter** writer)
+int sw_close_writer(StreamWriter* writer)
 {
-    StreamWriter* w = *writer;
+    StreamWriter* w = writer;
 
     if (w->audio_encoder != NULL)
     {
@@ -65,8 +65,11 @@ int sw_close_writer(StreamWriter** writer)
 
     /* free the stream */
     avformat_free_context(w->output_context);
+}
 
-    av_free(w);
+int sw_free_writer(StreamWriter** writer)
+{
+    av_free(*writer);
 
     *writer = NULL;
 }

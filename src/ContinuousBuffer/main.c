@@ -52,8 +52,6 @@ int read_audio_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 
     if (audioFrameCounter >= 44100*5)
     {
-        cb_flush_to_writer(buffer, audioWriter);
-
         // Finish file reading and exit the program
         return -1;
     }
@@ -92,7 +90,11 @@ int main()
 
     sr_read_stream(speakerReader, read_audio_frame);
 
+    cb_flush_to_writer(buffer, audioWriter);
+
+    sw_close_writer(audioWriter);
+
     cb_free_buffer(&buffer);
     sr_free_reader(&speakerReader);
-    sw_close_writer(&audioWriter);
+    sw_free_writer(&audioWriter);
 }
