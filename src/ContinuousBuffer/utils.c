@@ -356,6 +356,6 @@ int free_frames(AVFrame* frames, int64_t nb_frames)
     {
         frame = frames;
         frames++;
-        av_frame_free(&frame);
+        //av_frame_free(&frame);
     }
 }

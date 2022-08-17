@@ -39,7 +39,7 @@ ContinuousBufferStream* cb_allocate_audio_buffer(ContinuousBuffer* buffer, AVRat
     buffer_stream->sample_fmt = sample_fmt;
     buffer_stream->frame_size = frame_size;
 
-    size_t queue_length = (size_t)time_base.den * buffer->duration / ((size_t)frame_size * 1000);
+    size_t queue_length = (size_t)sample_rate * buffer->duration / (((size_t)frame_size) * 1000);
     buffer_stream->queue = av_fifo_alloc_array(queue_length, sizeof(AVFrame));
 
     buffer->audio = buffer_stream;

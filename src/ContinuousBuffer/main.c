@@ -50,7 +50,7 @@ int read_audio_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 
     audioFrameCounter += frame->nb_samples;
 
-    if (audioFrameCounter >= 44100*5)
+    if (audioFrameCounter >= 44100*20)
     {
         // Finish file reading and exit the program
         return -1;
@@ -76,7 +76,7 @@ int main()
 
     sw_open_writer(audioWriter);
 
-    buffer = cb_allocate_buffer(5000);
+    buffer = cb_allocate_buffer(20000);
 
     cb_allocate_audio_buffer(
         buffer,
