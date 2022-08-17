@@ -21,6 +21,7 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
 
     // get all the available frames from the decoder
     while (ret >= 0) {
+
         ret = avcodec_receive_frame(dec, frame);
         if (ret < 0) {
             // those two return values are special and mean there is no output
@@ -39,7 +40,7 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
 
         av_frame_unref(frame);
         if (ret < 0)
-            return ret;
+            return ret;        
     }
 
     return 0;
@@ -51,7 +52,11 @@ StreamReader* sr_open_stream_from_format(const char* input, AVInputFormat* forma
 
     AVFormatContext* inputFormat = NULL;
     /* open input file, and allocate format context */
-    if (avformat_open_input(&inputFormat, input, format, NULL) < 0) {
+
+    AVDictionary* opts = NULL;
+    av_dict_set(&opts, "framerate", "60", 0);
+
+    if (avformat_open_input(&inputFormat, input, format, &opts) < 0) {
         fprintf(stderr, "Could not find %s\n", input);
         av_free(inputFormat);
         return NULL;
@@ -122,9 +127,11 @@ int sr_read_stream(StreamReader* reader, int (*callback)(AVFrame* frame, enum AV
         return -1;
     }
 
+    clock_t begin = clock();
     int ret = 0;
     /* read frames from the file */
     while (av_read_frame(reader->input_context, pkt) >= 0) {
+
         // check if the packet belongs to a stream we are interested in, otherwise
         // skip it
         if (pkt->stream_index == reader->video_stream_index)
@@ -135,6 +142,10 @@ int sr_read_stream(StreamReader* reader, int (*callback)(AVFrame* frame, enum AV
         if (ret < 0)
             break;
     }
+
+    clock_t end = clock();
+    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+    printf("Reading time %f\n", time_spent);
 
     if (ret == 0)
     {

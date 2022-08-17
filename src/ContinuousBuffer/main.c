@@ -7,10 +7,8 @@
 #include "stream-reader.h"
 #include "stream-writer.h"
 
+#define FPS 30
 #define OUTPUT_BIT_RATE 96000
-
-StreamReader* speakerReader;
-StreamWriter* audioWriter;
 ContinuousBuffer* buffer;
 int videoFrameCounter = 0;
 int audioFrameCounter = 0;
@@ -27,7 +25,7 @@ int read_video_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
         videoFrameCounter++;
     }
 
-    if (videoFrameCounter == 15 * 30)
+    if (videoFrameCounter == 5 * FPS)
     {
         // Finish file reading and exit the program
         return -1;
@@ -64,8 +62,8 @@ int main()
     avdevice_register_all();
     get_devices_list("dshow");
 
-    speakerReader = sr_open_input("audio=Stereo Mix (Realtek(R) Audio)", "dshow");
-    audioWriter = sw_allocate_writer("C:/temp/speakers-buf.mp4", NULL);
+    /*StreamReader* speakerReader = sr_open_input("audio=Stereo Mix (Realtek(R) Audio)", "dshow");
+    StreamWriter* audioWriter = sw_allocate_writer("C:/temp/speakers-buf.mp4", NULL);
 
     sw_allocate_audio_stream(audioWriter, 
         AV_CODEC_ID_AAC, 
@@ -96,5 +94,48 @@ int main()
 
     cb_free_buffer(&buffer);
     sr_free_reader(&speakerReader);
-    sw_free_writer(&audioWriter);
+    sw_free_writer(&audioWriter);*/
+
+    StreamReader* desktopReader = sr_open_input("desktop", "gdigrab");
+    StreamWriter* screenWriter = sw_allocate_writer("C:/temp/desktop-buf.mp4", NULL);
+
+    AVRational time_base;
+    time_base.num = 1;
+    time_base.den = FPS;
+    sw_allocate_video_stream(screenWriter,
+        AV_CODEC_ID_H264,
+        time_base,
+        desktopReader->video_decoder->bit_rate,
+        desktopReader->video_decoder->width,
+        desktopReader->video_decoder->height,
+        AV_PIX_FMT_YUV420P);
+
+    sw_open_writer(screenWriter);
+
+    buffer = cb_allocate_buffer(5000);
+
+    cb_allocate_video_buffer(
+        buffer,
+        time_base,
+        desktopReader->video_decoder->codec_id,
+        desktopReader->video_decoder->bit_rate,
+        desktopReader->video_decoder->width,
+        desktopReader->video_decoder->height,
+        desktopReader->video_decoder->pix_fmt);
+
+    clock_t begin = clock();
+
+    sr_read_stream(desktopReader, read_video_frame);
+
+    clock_t end = clock();
+    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+    printf("Reading time %f\n", time_spent);
+
+    cb_flush_to_writer(buffer, screenWriter);
+
+    sw_close_writer(screenWriter);
+
+    cb_free_buffer(&buffer);
+    sr_free_reader(&desktopReader);
+    sw_free_writer(&screenWriter);
 }

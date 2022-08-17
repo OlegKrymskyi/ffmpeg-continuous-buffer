@@ -12,6 +12,9 @@ ContinuousBufferStream* cb_allocate_video_buffer(ContinuousBuffer* buffer, AVRat
     buffer_stream->bit_rate = bit_rate;
 
     buffer_stream->queue = av_fifo_alloc_array((size_t)time_base.den * buffer->duration / 1000, sizeof(AVFrame));
+
+    buffer->video = buffer_stream;
+
     return buffer;
 }
 
