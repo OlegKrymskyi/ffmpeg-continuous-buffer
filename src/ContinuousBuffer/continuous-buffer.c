@@ -217,7 +217,9 @@ int64_t cb_pop_all_frames(ContinuousBuffer* buffer, enum AVMediaType type, AVFra
     }
     else if (type == AVMEDIA_TYPE_AUDIO && buffer->audio != NULL)
     {
-        return cb_pop_all_frames_internal(buffer->audio->queue, frames);
+        int64_t result = cb_pop_all_frames_internal(buffer->audio->queue, frames);
+        buffer->audio->nb_samples = 0;
+        return result;
     }
 
     return -1;
