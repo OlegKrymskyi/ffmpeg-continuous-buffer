@@ -4,8 +4,6 @@
 StreamWriter* sw_allocate_writer(const char* output, const char* format)
 {    
     AVFormatContext* outputFormat;
-    AVCodec* audioCodec, * videoCodec;
-    AVCodecContext* audioCodecCtx, * videoCodecCtx;
 
     /* allocate the output media context */
     avformat_alloc_output_context2(&outputFormat, NULL, format, output);
@@ -524,6 +522,8 @@ static int sw_write_audio_frames(StreamWriter* writer, AVFrame* frames, int nb_f
         av_freep(&converted_input_samples[0]);
         free(converted_input_samples);
     }
+
+    av_audio_fifo_free(&fifo);
 
     return 0;
 }

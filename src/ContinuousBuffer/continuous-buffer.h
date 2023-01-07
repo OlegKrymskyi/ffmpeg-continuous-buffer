@@ -10,13 +10,15 @@
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
 #include <libavutil/fifo.h>
+#include <libavutil/audio_fifo.h>
 
 #include "utils.h"
-#include "stream-writer.h"
 
 typedef struct ContinuousBufferStream {
 
     enum AVMediaType type;
+    
+    AVCodecContext* encoder;
 
     AVFifoBuffer* queue;
     AVRational time_base;
@@ -28,6 +30,7 @@ typedef struct ContinuousBufferStream {
     int width;
     int height;
     enum AVPixelFormat pixel_format;
+    int nb_frames;
 
     int sample_rate;    
     int channel_layout;
@@ -35,9 +38,13 @@ typedef struct ContinuousBufferStream {
     int nb_samples;
     int frame_size;
 
+    AVAudioFifo* audio;
+
 } ContinuousBufferStream;
 
 typedef struct ContinuousBuffer {
+
+    AVFormatContext* output;
 
     ContinuousBufferStream* video;
     ContinuousBufferStream* audio;
@@ -48,9 +55,9 @@ typedef struct ContinuousBuffer {
 
 int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContext* inputFormat, enum AVMediaType type);
 
-ContinuousBufferStream* cb_allocate_video_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codec, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format);
+ContinuousBufferStream* cb_allocate_video_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codecId, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format);
 
-ContinuousBufferStream* cb_allocate_audio_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codec, int sample_rate, int64_t bit_rate, int channel_layout,
+ContinuousBufferStream* cb_allocate_audio_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codecId, int sample_rate, int64_t bit_rate, int channel_layout,
     enum AVSampleFormat sample_fmt, int frame_size);
 
 ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, int64_t duration);
@@ -65,10 +72,12 @@ int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64
 
 int cb_is_empty(ContinuousBuffer* buffer);
 
-int64_t cb_pop_all_frames(ContinuousBuffer* buffer, enum AVMediaType type, AVFrame** frames);
+int64_t cb_pop_all_frames(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket** packets);
 
-ContinuousBuffer* cb_allocate_buffer(int64_t maxDuration);
+ContinuousBuffer* cb_allocate_buffer(const char* format, int64_t maxDuration);
 
 int64_t cb_get_buffer_stream_duration(ContinuousBufferStream* buffer);
 
-int cb_flush_to_writer(ContinuousBuffer* buffer, StreamWriter* writer);
+int cb_start(ContinuousBuffer* buffer);
+
+int cb_flush_to_file(const char* file);

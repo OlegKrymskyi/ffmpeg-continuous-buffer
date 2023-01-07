@@ -97,22 +97,12 @@ int main()
     sw_free_writer(&audioWriter);*/
 
     StreamReader* desktopReader = sr_open_input("desktop", "gdigrab");
-    StreamWriter* screenWriter = sw_allocate_writer("C:/temp/desktop-buf.mp4", NULL);
 
     AVRational time_base;
     time_base.num = 1;
     time_base.den = FPS;
-    sw_allocate_video_stream(screenWriter,
-        AV_CODEC_ID_H264,
-        time_base,
-        desktopReader->video_decoder->bit_rate,
-        desktopReader->video_decoder->width,
-        desktopReader->video_decoder->height,
-        AV_PIX_FMT_YUV420P);
 
-    sw_open_writer(screenWriter);
-
-    buffer = cb_allocate_buffer(5000);
+    buffer = cb_allocate_buffer("mp4", 5000);
 
     cb_allocate_video_buffer(
         buffer,
@@ -123,6 +113,8 @@ int main()
         desktopReader->video_decoder->height,
         desktopReader->video_decoder->pix_fmt);
 
+    cb_start(buffer);
+
     clock_t begin = clock();
 
     sr_read_stream(desktopReader, read_video_frame);
@@ -131,11 +123,8 @@ int main()
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Reading time %f\n", time_spent);
 
-    cb_flush_to_writer(buffer, screenWriter);
-
-    sw_close_writer(screenWriter);
+    cb_flush_to_file(buffer, "C:/temp/desktop-buf.mp4");
 
     cb_free_buffer(&buffer);
     sr_free_reader(&desktopReader);
-    sw_free_writer(&screenWriter);
 }
