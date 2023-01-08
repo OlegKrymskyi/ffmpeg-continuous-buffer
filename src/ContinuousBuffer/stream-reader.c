@@ -147,6 +147,7 @@ int sr_read_stream(StreamReader* reader, int (*callback)(AVFrame* frame, enum AV
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Reading time %f\n", time_spent);
 
+    av_packet_free(&pkt);
     if (ret == 0)
     {
         /* flush the decoders */
@@ -155,6 +156,8 @@ int sr_read_stream(StreamReader* reader, int (*callback)(AVFrame* frame, enum AV
         if (reader->audio_stream_index >= 0)
             decode_packet(reader->audio_decoder, NULL, frame, callback);
     }
+    
+    av_frame_free(&frame);
 }
 
 int sr_free_reader(StreamReader** reader)

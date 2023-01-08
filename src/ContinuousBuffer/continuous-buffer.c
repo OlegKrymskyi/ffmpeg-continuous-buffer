@@ -1,5 +1,52 @@
 #include "continuous-buffer.h"
 
+int write_packet_callback(struct AVFormatContext* format, AVPacket* pkt)
+{
+    return 1;
+}
+
+ContinuousBuffer* cb_allocate_buffer(const char* format, int64_t maxDuration)
+{
+    ContinuousBuffer* buffer = av_mallocz(sizeof(ContinuousBuffer));
+
+    buffer->duration = maxDuration;
+
+    AVFormatContext* outputFormat = avformat_alloc_context();
+
+    /* allocate the output media context */
+    /*avformat_alloc_output_context2(&outputFormat, NULL, format, NULL);
+    if (!outputFormat) {
+        fprintf(stderr, "Could not decode output format from file extension: using FLV.\n");
+        avformat_alloc_output_context2(&outputFormat, NULL, "flv", NULL);
+    }
+
+    if (!outputFormat) {
+        fprintf(stderr, "Output format was not initialized.\n");
+        return -1;
+    }*/
+
+    // Create internal Buffer for FFmpeg:
+    const int iBufSize = 32 * 1024;
+    void* pBuffer = av_mallocz(iBufSize);
+
+    AVIOContext* pIOCtx = avio_alloc_context(pBuffer, iBufSize,  // internal Buffer and its size
+        1,                  // bWriteable (1=true,0=false) 
+        NULL,          // user data ; will be passed to our callback functions
+        NULL,
+        write_packet_callback,                  // Write callback function (not used in this example) 
+        NULL);
+
+    outputFormat->pb = pIOCtx;
+
+    outputFormat->oformat = av_find_output_format(format);
+
+    outputFormat->flags = AVFMT_FLAG_CUSTOM_IO;
+
+    buffer->output = outputFormat;
+
+    return buffer;
+}
+
 ContinuousBufferStream* cb_allocate_video_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codecId, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format)
 {
     ContinuousBufferStream* buffer_stream = av_mallocz(sizeof(ContinuousBufferStream));
@@ -235,13 +282,30 @@ int cb_free_buffer(ContinuousBuffer** buffer)
         av_audio_fifo_free(b->audio->audio);
         av_fifo_free(b->audio->queue);
         av_free(b->audio);
+
+        if (b->audio->encoder != NULL)
+        {
+            avcodec_free_context(&b->audio->encoder);
+        }
     }
 
     if (b->video != NULL)
     {
         av_fifo_free(b->video->queue);
         av_free(b->video);
+
+        if (b->video->encoder != NULL)
+        {
+            avcodec_free_context(&b->video->encoder);
+        }
     }
+
+    if (!(b->output->oformat->flags & AVFMT_NOFILE))
+        /* Close the output file. */
+        avio_closep(&b->output->pb);
+
+    /* free the stream */
+    avformat_free_context(b->output);
 
     av_free(b);
 
@@ -250,14 +314,49 @@ int cb_free_buffer(ContinuousBuffer** buffer)
 
 int cb_push_frame(ContinuousBuffer* buffer, AVFrame* frame, enum AVMediaType type)
 {
-    if (type == AVMEDIA_TYPE_VIDEO && buffer->video != NULL)
-    {
-        return cb_push_frame_to_queue(buffer->video, frame, buffer->duration);
+    ContinuousBufferStream* buffer_stream = NULL;
+
+    if (type == AVMEDIA_TYPE_VIDEO) {
+        buffer_stream = buffer->video;
     }
-    else if (type == AVMEDIA_TYPE_AUDIO && buffer->audio != NULL)
-    {
-        return cb_push_frame_to_queue(buffer->audio, frame, buffer->duration);
+    else if (type == AVMEDIA_TYPE_AUDIO) {
+        buffer_stream = buffer->audio;
     }
+
+    // Taking current amount the free space in the queue.
+    int space = av_fifo_space(buffer_stream->queue);
+
+    // Taking current amount of queue which was already used.
+    int size = av_fifo_size(buffer_stream->queue);
+
+    int64_t duration = cb_get_buffer_stream_duration(buffer);
+
+    while (av_fifo_space(buffer_stream->queue) <= 0 || duration >= buffer->duration)
+    {
+        AVPacket* removePkt = av_mallocz(sizeof(AVPacket));
+        av_fifo_generic_read(buffer_stream->queue, removePkt, sizeof(AVPacket), NULL);
+
+        if (type == AVMEDIA_TYPE_AUDIO)
+        {
+            buffer_stream->nb_samples -= frame->nb_samples;
+        }
+
+        av_frame_free(&removePkt);
+
+        duration = cb_get_buffer_stream_duration(buffer);
+    }
+
+    AVFrame* cloneFrame = copy_frame(frame);
+    if (type == AVMEDIA_TYPE_VIDEO)
+    {
+        cb_push_video_frame_to_queue(buffer, cloneFrame);
+    }
+    /* if (av_fifo_generic_write(buffer->queue, cloneFrame, sizeof(AVPacket), NULL) > 0)
+     {
+         buffer->nb_samples += frame->nb_samples;
+     }*/
+
+    return 0;
 
     return -1;
 }
@@ -300,6 +399,8 @@ int cb_push_video_frame_to_queue(ContinuousBuffer* buffer, AVFrame* frame)
         return -1;
     }
 
+    fprintf(stderr, "Frames %d\n", buffer->video->nb_frames);
+
     tmp->format = buffer->video->encoder->pix_fmt;
     tmp->width = buffer->video->encoder->width;
     tmp->height = buffer->video->encoder->height;
@@ -336,45 +437,8 @@ int cb_push_video_frame_to_queue(ContinuousBuffer* buffer, AVFrame* frame)
         sws_freeContext(sws_ctx);
     }
 
+    //av_packet_free(&pkt);
     av_fifo_generic_write(buffer->video->queue, pkt, sizeof(AVPacket), NULL);
-
-    return 0;
-}
-
-int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64_t maxDuration)
-{
-    // Taking current amount the free space in the queue.
-    int space = av_fifo_space(buffer->queue);
-
-    // Taking current amount of queue which was already used.
-    int size = av_fifo_size(buffer->queue);
-
-    int64_t duration = cb_get_buffer_stream_duration(buffer);
-
-    while (av_fifo_space(buffer->queue) <= 0 || duration >= maxDuration)
-    {
-        AVPacket* removePkt = av_mallocz(sizeof(AVPacket));
-        av_fifo_generic_read(buffer->queue, removePkt, sizeof(AVPacket), NULL);
-
-        if (buffer->type == AVMEDIA_TYPE_AUDIO)
-        {
-            buffer->nb_samples -= frame->nb_samples;
-        }
-
-        av_frame_free(&removePkt);
-
-        duration = cb_get_buffer_stream_duration(buffer);
-    }
-
-    AVFrame* cloneFrame = copy_frame(frame);
-    if (buffer->type == AVMEDIA_TYPE_VIDEO)
-    {
-        cb_push_video_frame_to_queue(buffer, cloneFrame);
-    }
-   /* if (av_fifo_generic_write(buffer->queue, cloneFrame, sizeof(AVPacket), NULL) > 0)
-    {
-        buffer->nb_samples += frame->nb_samples;
-    }*/
 
     return 0;
 }
@@ -484,43 +548,20 @@ int cb_is_empty(ContinuousBuffer* buffer)
     return 1;
 }
 
-ContinuousBuffer* cb_allocate_buffer(const char* format, int64_t maxDuration)
-{
-    ContinuousBuffer* buffer = av_mallocz(sizeof(ContinuousBuffer));
-
-    buffer->duration = maxDuration;
-
-    AVFormatContext* outputFormat;
-
-    /* allocate the output media context */
-    avformat_alloc_output_context2(&outputFormat, NULL, format, NULL);
-    if (!outputFormat) {
-        fprintf(stderr, "Could not decode output format from file extension: using FLV.\n");
-        avformat_alloc_output_context2(&outputFormat, NULL, "flv", NULL);
-    }
-
-    if (!outputFormat) {
-        fprintf(stderr, "Output format was not initialized.\n");
-        return -1;
-    }
-
-    buffer->output = outputFormat;    
-
-    return buffer;
-}
-
 int cb_start(ContinuousBuffer* buffer)
 {
     av_dump_format(buffer->output, 0, NULL, 1);
 
-    int ret = avformat_write_header(buffer->output, NULL);
+    //int ret = avformat_write_header(buffer->output, NULL);
 
     /* Write the stream header, if any. */
-    if (ret < 0) {
+    /*if (ret < 0) {
         fprintf(stderr, "Error occurred when opening output file: %s\n",
             av_err2str(ret));
         return -1;
-    }
+    }*/
+
+    //buffer->output->oformat->write_packet = write_packet_internal;
 
     return 0;
 }

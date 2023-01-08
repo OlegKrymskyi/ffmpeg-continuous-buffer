@@ -107,11 +107,11 @@ int main()
     cb_allocate_video_buffer(
         buffer,
         time_base,
-        desktopReader->video_decoder->codec_id,
-        desktopReader->video_decoder->bit_rate,
+        AV_CODEC_ID_H264,
+        4000000,
         desktopReader->video_decoder->width,
         desktopReader->video_decoder->height,
-        desktopReader->video_decoder->pix_fmt);
+        AV_PIX_FMT_YUV420P);
 
     cb_start(buffer);
 

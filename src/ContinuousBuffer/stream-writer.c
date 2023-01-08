@@ -396,6 +396,8 @@ static int sw_write_video_frames(StreamWriter* writer, AVFrame* frames, int nb_f
         sws_freeContext(sws_ctx);
     }
 
+    av_packet_free(&pkt);
+
     return 0;
 }
 
@@ -524,6 +526,8 @@ static int sw_write_audio_frames(StreamWriter* writer, AVFrame* frames, int nb_f
     }
 
     av_audio_fifo_free(&fifo);
+
+    av_packet_free(&pkt);
 
     return 0;
 }
