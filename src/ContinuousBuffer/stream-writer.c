@@ -1,20 +1,11 @@
 #include "stream-writer.h"
 #include "utils.h"
 
-static int write_packet_internal(void* opaque, uint8_t* buf, int buf_size) {
-    return 1;
-}
-
-static int64_t seek(void* opaque, int64_t offset, int whence) {
-   
-    return 1;
-}
-
 StreamWriter* sw_allocate_writer(const char* output, const char* format)
 {    
     AVFormatContext* outputFormat;
 
-    AVOutputFormat* of = av_guess_format("mp4", "test.mp4", 0);
+    AVOutputFormat* of = av_guess_format("fifo", NULL, NULL);
     /* allocate the output media context */
     avformat_alloc_output_context2(&outputFormat, of, NULL, NULL);
     if (!outputFormat)
@@ -22,19 +13,6 @@ StreamWriter* sw_allocate_writer(const char* output, const char* format)
         fprintf(stderr, "Output format was not initialized.\n");
         return -1;
     }
-
-    const int buff_size = 4 * 1024;
-    void* buffer = av_mallocz(buff_size);
-    AVIOContext* pIOCtx = avio_alloc_context(buffer, buff_size,  // internal buffer and its size
-        1,                  // bWriteable (1=true,0=false) 
-        buffer,          // user data ; will be passed to our callback functions
-        NULL,
-        &write_packet_internal,                  // Write callback function (not used in this example) 
-        &seek);
-
-    outputFormat->pb = pIOCtx;
-    outputFormat->flags |= AVFMT_FLAG_CUSTOM_IO | AVFMT_FLAG_FLUSH_PACKETS;
-    outputFormat->oformat = of;
 
     StreamWriter* writer = av_mallocz(sizeof(StreamWriter));
 
@@ -231,8 +209,14 @@ int sw_open_writer(StreamWriter* writer)
         }
     }*/
 
+    AVDictionary* opt = NULL;
+
+    av_dict_set(&opt, "fifo_format", "null", 0);
+    av_dict_set_int(&opt, "drop_pkts_on_overflow", 1, 0);
+    av_dict_set_int(&opt, "queue_size", 150, 0);
+
     /* Write the stream header, if any. */
-    ret = avformat_write_header(writer->output_context, NULL);
+    ret = avformat_write_header(writer->output_context, &opt);
     if (ret < 0) {
         fprintf(stderr, "Error occurred when opening output file: %s\n",
             av_err2str(ret));
