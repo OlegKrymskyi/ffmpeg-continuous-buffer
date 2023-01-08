@@ -1,23 +1,40 @@
 #include "stream-writer.h"
 #include "utils.h"
 
+static int write_packet_internal(void* opaque, uint8_t* buf, int buf_size) {
+    return 1;
+}
+
+static int64_t seek(void* opaque, int64_t offset, int whence) {
+   
+    return 1;
+}
+
 StreamWriter* sw_allocate_writer(const char* output, const char* format)
 {    
     AVFormatContext* outputFormat;
-    AVCodec* audioCodec, * videoCodec;
-    AVCodecContext* audioCodecCtx, * videoCodecCtx;
 
+    AVOutputFormat* of = av_guess_format("mp4", "test.mp4", 0);
     /* allocate the output media context */
-    avformat_alloc_output_context2(&outputFormat, NULL, format, output);
-    if (!outputFormat) {
-        fprintf(stderr, "Could not decode output format from file extension: using FLV.\n");
-        avformat_alloc_output_context2(&outputFormat, NULL, "flv", output);
-    }
+    avformat_alloc_output_context2(&outputFormat, of, NULL, NULL);
     if (!outputFormat)
     {
         fprintf(stderr, "Output format was not initialized.\n");
         return -1;
     }
+
+    const int buff_size = 4 * 1024;
+    void* buffer = av_mallocz(buff_size);
+    AVIOContext* pIOCtx = avio_alloc_context(buffer, buff_size,  // internal buffer and its size
+        1,                  // bWriteable (1=true,0=false) 
+        buffer,          // user data ; will be passed to our callback functions
+        NULL,
+        &write_packet_internal,                  // Write callback function (not used in this example) 
+        &seek);
+
+    outputFormat->pb = pIOCtx;
+    outputFormat->flags |= AVFMT_FLAG_CUSTOM_IO | AVFMT_FLAG_FLUSH_PACKETS;
+    outputFormat->oformat = of;
 
     StreamWriter* writer = av_mallocz(sizeof(StreamWriter));
 
@@ -200,19 +217,19 @@ int sw_allocate_audio_stream(StreamWriter* writer, enum AVCodecID codecId, int64
 }
 
 int sw_open_writer(StreamWriter* writer)
-{
-    av_dump_format(writer->output_context, 0, writer->output, 1);
+{    
+    av_dump_format(writer->output_context, 0, NULL, 1);
 
     int ret = 0;
     /* open the output file, if needed */
-    if (!(writer->output_context->oformat->flags & AVFMT_NOFILE)) {
+    /*if (!(writer->output_context->oformat->flags & AVFMT_NOFILE)) {
         ret = avio_open(&(writer->output_context->pb), writer->output, AVIO_FLAG_WRITE);
         if (ret < 0) {
             fprintf(stderr, "Could not open '%s': %s\n", writer->output,
                 av_err2str(ret));
             return -1;
         }
-    }
+    }*/
 
     /* Write the stream header, if any. */
     ret = avformat_write_header(writer->output_context, NULL);
@@ -331,38 +348,38 @@ static int add_samples_to_fifo(AVAudioFifo* fifo,
 
 static int sw_write_video_frames(StreamWriter* writer, AVFrame* frames, int nb_frames)
 {
-    AVPacket* pkt = av_packet_alloc();
-    int stNum = get_stream_number(writer->output_context, AVMEDIA_TYPE_VIDEO);
-
-    AVFrame* frame = frames;
-
-    AVFrame* tmp = av_frame_alloc();
-    if (!tmp) {
-        fprintf(stderr, "Could not allocate the frame\n");
-        return -1;
-    }
-
-    int ret;
-
-    static struct SwsContext* sws_ctx = NULL;
-    sws_ctx = sws_getContext(frame->width, frame->height, frame->format,
-        writer->video_encoder->width, writer->video_encoder->height, writer->video_encoder->pix_fmt,
-        SWS_BICUBIC, NULL, NULL, NULL);
-
-    if (!sws_ctx) {
-        fprintf(stderr, "sws_getContext was not initialized\n");
-        return -1;
-    }
-
-    tmp->format = writer->video_encoder->pix_fmt;
-    tmp->width = writer->video_encoder->width;
-    tmp->height = writer->video_encoder->height;
-    tmp->pts = writer->latest_video_pts;
-
-    av_frame_get_buffer(tmp, 0);
-
     for (int i = 0; i < nb_frames; i++)
     {
+        AVPacket* pkt = av_packet_alloc();
+        int stNum = get_stream_number(writer->output_context, AVMEDIA_TYPE_VIDEO);
+
+        AVFrame* frame = frames;
+
+        AVFrame* tmp = av_frame_alloc();
+        if (!tmp) {
+            fprintf(stderr, "Could not allocate the frame\n");
+            return -1;
+        }
+
+        int ret;
+
+        static struct SwsContext* sws_ctx = NULL;
+        sws_ctx = sws_getContext(frame->width, frame->height, frame->format,
+            writer->video_encoder->width, writer->video_encoder->height, writer->video_encoder->pix_fmt,
+            SWS_BICUBIC, NULL, NULL, NULL);
+
+        if (!sws_ctx) {
+            fprintf(stderr, "sws_getContext was not initialized\n");
+            return -1;
+        }
+
+        tmp->format = writer->video_encoder->pix_fmt;
+        tmp->width = writer->video_encoder->width;
+        tmp->height = writer->video_encoder->height;
+        tmp->pts = writer->latest_video_pts;
+
+        av_frame_get_buffer(tmp, 0);
+
         frame = frames;
         ret = sws_scale(sws_ctx,
             frame->data,
@@ -388,14 +405,16 @@ static int sw_write_video_frames(StreamWriter* writer, AVFrame* frames, int nb_f
 
         writer->latest_video_pts += 1;
         
+        av_frame_free(&tmp);
+
+        if (sws_ctx != NULL)
+        {
+            sws_freeContext(sws_ctx);
+        }
+
+        av_packet_free(&pkt);
+
         frames++;
-    }
-
-    av_frame_free(&tmp);
-
-    if (sws_ctx != NULL)
-    {
-        sws_freeContext(sws_ctx);
     }
 
     return 0;
