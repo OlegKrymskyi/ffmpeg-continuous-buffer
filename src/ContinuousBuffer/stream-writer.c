@@ -71,64 +71,10 @@ int sw_free_writer(StreamWriter** writer)
 
 int sw_allocate_video_stream(StreamWriter* writer, enum AVCodecID codecId, AVRational time_base, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format)
 {
-    AVCodecContext* c = NULL;
-
-    /* find the encoder */
-    AVCodec* codec = avcodec_find_encoder(codecId);
-    if (!codec) {
-        fprintf(stderr, "Could not find encoder for '%s'\n", avcodec_get_name(codecId));
+    AVCodecContext* c = allocate_video_codec_context(writer->output_context, codecId, time_base, bit_rate, width, height, pixel_format);
+    if (c == NULL) {
         return -1;
     }
-
-    AVStream* st = avformat_new_stream(writer->output_context, NULL);
-    if (st == NULL) {
-        fprintf(stderr, "Could not allocate stream\n");
-        return -1;
-    }
-
-    st->id = writer->output_context->nb_streams - 1;
-
-    c = avcodec_alloc_context3(codec);
-    if (!c) {
-        fprintf(stderr, "Could not allocate video codec context\n");
-        return -1;
-    }
-
-    /* put sample parameters */
-    c->bit_rate = bit_rate;
-    /* resolution must be a multiple of two */
-    c->width = width;
-    c->height = height;
-    /* frames per second */
-    c->time_base = time_base;
-    c->framerate = (AVRational){ time_base.den, time_base.num };
-
-    st->time_base = c->time_base;
-
-    /* emit one intra frame every ten frames
-     * check frame pict_type before passing frame
-     * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
-     * then gop_size is ignored and the output of encoder
-     * will always be I frame irrespective to gop_size
-     */
-    c->gop_size = 10;
-    c->max_b_frames = 1;
-    c->pix_fmt = pixel_format;
-
-    if (codec == AV_CODEC_ID_H264)
-        av_opt_set(c->priv_data, "preset", "slow", 0);
-
-    /* open it */
-    if (avcodec_open2(c, codec, NULL) < 0) {
-        fprintf(stderr, "Could not open codec\n");
-        return -1;
-    }
-
-    /* Some formats want stream headers to be separate. */
-    if (writer->output_context->oformat->flags & AVFMT_GLOBALHEADER)
-        c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
-    avcodec_parameters_from_context(st->codecpar, c);
 
     writer->video_encoder = c;
 
@@ -137,59 +83,13 @@ int sw_allocate_video_stream(StreamWriter* writer, enum AVCodecID codecId, AVRat
 
 int sw_allocate_audio_stream(StreamWriter* writer, enum AVCodecID codecId, int64_t bit_rate, int sample_rate, int channel_layout, enum AVSampleFormat sample_fmt)
 {
-    AVCodecContext* c = NULL;
+    AVCodecContext* c = allocate_audio_codec_context(writer->output, codecId, bit_rate, sample_rate, channel_layout, sample_fmt);
 
-    /* find the encoder */
-    AVCodec* codec = avcodec_find_encoder(codecId);
-    if (!codec) {
-        fprintf(stderr, "Could not find encoder for '%s'\n", avcodec_get_name(codecId));
+    if (c == NULL) {
         return -1;
     }
-
-    AVStream* st = avformat_new_stream(writer->output_context, NULL);
-    if (st == NULL) {
-        fprintf(stderr, "Could not allocate stream\n");
-        return -1;
-    }
-
-    st->id = writer->output_context->nb_streams - 1;
-
-    c = avcodec_alloc_context3(codec);
-    if (!c) {
-        fprintf(stderr, "Could not allocate video codec context\n");
-        return -1;
-    }
-
-    /* put sample parameters */
-    c->bit_rate = bit_rate;
-
-    /* check that the encoder supports s16 pcm input */
-    c->sample_fmt = sample_fmt;
-    if (!check_sample_fmt(codec, c->sample_fmt)) {
-        fprintf(stderr, "Encoder does not support sample format %s",
-            av_get_sample_fmt_name(c->sample_fmt));
-        exit(1);
-    }
-
-    /* select other audio parameters supported by the encoder */
-    c->sample_rate = select_sample_rate(codec);
-    c->channel_layout = channel_layout;
-
-    /* open it */
-    if (avcodec_open2(c, codec, NULL) < 0) {
-        fprintf(stderr, "Could not open codec\n");
-        return -1;
-    }
-
-    /* Some formats want stream headers to be separate. */
-    if (writer->output_context->oformat->flags & AVFMT_GLOBALHEADER)
-        c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
     writer->audio_encoder = c;
-
-    st->time_base = (AVRational){ 1, c->sample_rate };
-
-    avcodec_parameters_from_context(st->codecpar, c);
 
     return 0;
 }
@@ -541,6 +441,46 @@ int sw_write_frames(StreamWriter* writer, enum AVMediaType type, AVFrame* frames
     {
         return sw_write_video_frames(writer, frames, nb_frames);
     }
+
+    return 0;
+}
+
+int sw_flush_to_file(StreamWriter* writer, const char* output, const char* format)
+{
+    AVFormatContext* outputFormat;
+
+    /* allocate the output media context */
+    avformat_alloc_output_context2(&outputFormat, NULL, format, output);
+    if (!outputFormat)
+    {
+        fprintf(stderr, "Output format was not initialized.\n");
+        return -1;
+    }
+
+    AVCodecContext* audio = NULL;
+    if (writer->audio_encoder != NULL) {
+        audio = allocate_audio_codec_context(
+            outputFormat,
+            writer->audio_encoder->codec_id,
+            writer->audio_encoder->bit_rate,
+            writer->audio_encoder->sample_rate,
+            writer->audio_encoder->channel_layout,
+            writer->audio_encoder->sample_fmt);
+    }
+
+    AVCodecContext* video = NULL;
+    if (writer->video_encoder != NULL) {
+        video = allocate_video_codec_context(
+            outputFormat,
+            writer->video_encoder->codec_id,
+            writer->video_encoder->time_base,
+            writer->video_encoder->bit_rate,
+            writer->video_encoder->width,
+            writer->video_encoder->height,
+            writer->video_encoder->pix_fmt);
+    }
+
+    FifoContext* fifo = writer->output_context->priv_data;
 
     return 0;
 }

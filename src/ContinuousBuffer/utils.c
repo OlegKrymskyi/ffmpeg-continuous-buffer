@@ -359,3 +359,124 @@ int free_frames(AVFrame* frames, int64_t nb_frames)
         //av_frame_free(&frame);
     }
 }
+
+AVCodecContext* allocate_video_codec_context(AVFormatContext* output, enum AVCodecID codecId, AVRational time_base, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format)
+{
+    AVCodecContext* c = NULL;
+
+    /* find the encoder */
+    AVCodec* codec = avcodec_find_encoder(codecId);
+    if (!codec) {
+        fprintf(stderr, "Could not find encoder for '%s'\n", avcodec_get_name(codecId));
+        return NULL;
+    }
+
+    AVStream* st = avformat_new_stream(output, NULL);
+    if (st == NULL) {
+        fprintf(stderr, "Could not allocate stream\n");
+        return NULL;
+    }
+
+    st->id = output->nb_streams - 1;
+
+    c = avcodec_alloc_context3(codec);
+    if (!c) {
+        fprintf(stderr, "Could not allocate video codec context\n");
+        return NULL;
+    }
+
+    /* put sample parameters */
+    c->bit_rate = bit_rate;
+    /* resolution must be a multiple of two */
+    c->width = width;
+    c->height = height;
+    /* frames per second */
+    c->time_base = time_base;
+    c->framerate = (AVRational){ time_base.den, time_base.num };
+
+    st->time_base = c->time_base;
+
+    /* emit one intra frame every ten frames
+     * check frame pict_type before passing frame
+     * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
+     * then gop_size is ignored and the output of encoder
+     * will always be I frame irrespective to gop_size
+     */
+    c->gop_size = 10;
+    c->max_b_frames = 1;
+    c->pix_fmt = pixel_format;
+
+    if (codec == AV_CODEC_ID_H264)
+        av_opt_set(c->priv_data, "preset", "slow", 0);
+
+    /* open it */
+    if (avcodec_open2(c, codec, NULL) < 0) {
+        fprintf(stderr, "Could not open codec\n");
+        return NULL;
+    }
+
+    /* Some formats want stream headers to be separate. */
+    if (output->oformat->flags & AVFMT_GLOBALHEADER)
+        c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    avcodec_parameters_from_context(st->codecpar, c);
+
+    return c;
+}
+
+AVCodecContext* allocate_audio_codec_context(AVFormatContext* output, enum AVCodecID codecId, int64_t bit_rate, int sample_rate, int channel_layout, enum AVSampleFormat sample_fmt)
+{
+    AVCodecContext* c = NULL;
+
+    /* find the encoder */
+    AVCodec* codec = avcodec_find_encoder(codecId);
+    if (!codec) {
+        fprintf(stderr, "Could not find encoder for '%s'\n", avcodec_get_name(codecId));
+        return NULL;
+    }
+
+    AVStream* st = avformat_new_stream(output, NULL);
+    if (st == NULL) {
+        fprintf(stderr, "Could not allocate stream\n");
+        return NULL;
+    }
+
+    st->id = output->nb_streams - 1;
+
+    c = avcodec_alloc_context3(codec);
+    if (!c) {
+        fprintf(stderr, "Could not allocate video codec context\n");
+        return NULL;
+    }
+
+    /* put sample parameters */
+    c->bit_rate = bit_rate;
+
+    /* check that the encoder supports s16 pcm input */
+    c->sample_fmt = sample_fmt;
+    if (!check_sample_fmt(codec, c->sample_fmt)) {
+        fprintf(stderr, "Encoder does not support sample format %s",
+            av_get_sample_fmt_name(c->sample_fmt));
+        exit(1);
+    }
+
+    /* select other audio parameters supported by the encoder */
+    c->sample_rate = select_sample_rate(codec);
+    c->channel_layout = channel_layout;
+
+    /* open it */
+    if (avcodec_open2(c, codec, NULL) < 0) {
+        fprintf(stderr, "Could not open codec\n");
+        return NULL;
+    }
+
+    /* Some formats want stream headers to be separate. */
+    if (output->oformat->flags & AVFMT_GLOBALHEADER)
+        c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    st->time_base = (AVRational){ 1, c->sample_rate };
+
+    avcodec_parameters_from_context(st->codecpar, c);
+
+    return c;
+}

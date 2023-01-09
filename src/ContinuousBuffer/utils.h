@@ -38,3 +38,7 @@ int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_n
 AVDeviceInfoList* get_devices_list(const char* format);
 
 int free_frames(AVFrame* frames, int64_t nb_frames);
+
+AVCodecContext* allocate_video_codec_context(AVFormatContext* output, enum AVCodecID codecId, AVRational time_base, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format);
+
+AVCodecContext* allocate_audio_codec_context(AVFormatContext* output, enum AVCodecID codecId, int64_t bit_rate, int sample_rate, int channel_layout, enum AVSampleFormat sample_fmt);

@@ -132,6 +132,7 @@ int main()
     printf("Reading time %f\n", time_spent);
 
     cb_flush_to_writer(buffer, screenWriter);
+    sw_flush_to_file(screenWriter, "C:/temp/desktop-buf.mp4", NULL);
 
     sw_close_writer(screenWriter);
 
