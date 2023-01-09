@@ -93,15 +93,13 @@ StreamReader* sr_open_stream_from_format(const char* input, AVInputFormat* forma
 
 StreamReader* sr_open_input(const char* input, const char* format)
 {
-    AVInputFormat* iformat = av_find_input_format(format);
+    const AVInputFormat* iformat = av_find_input_format(format);
     if (iformat == NULL)
     {
         return NULL;
     }
 
     StreamReader* reader = sr_open_stream_from_format(input, iformat);
-
-    av_free(iformat);
 
     return reader;
 }
@@ -179,6 +177,8 @@ int sr_free_reader(StreamReader** reader)
     av_free(r);
 
     *reader = NULL;
+
+    return 0;
 }
 
 float sr_get_number_of_video_frames_per_second(StreamReader* reader)

@@ -12,9 +12,9 @@ int check_sample_fmt(const AVCodec* codec, enum AVSampleFormat sample_fmt)
     return 0;
 }
 
-int select_channel_layout(const AVCodec* codec)
+uint64_t select_channel_layout(const AVCodec* codec)
 {
-    const int* p, * best_ch_layout;
+    const uint64_t* p, * best_ch_layout;
     int best_nb_channels = 0;
 
     if (!codec->channel_layouts)
@@ -143,7 +143,7 @@ int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
 
 int get_stream_number(AVFormatContext* fmt_ctx, enum AVMediaType type)
 {
-    for (int i = 0; i < fmt_ctx->nb_streams; i++)
+    for (unsigned int i = 0; i < fmt_ctx->nb_streams; i++)
     {
         if (fmt_ctx->streams[i]->codecpar->codec_type == type)
         {
@@ -328,12 +328,14 @@ int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_n
     avcodec_free_context(&c);
     av_frame_free(&tmp);
     av_packet_free(&pkt);
+
+    return 0;
 }
 
 AVDeviceInfoList* get_devices_list(const char* format)
 {
     AVDeviceInfoList* device_list = NULL;
-    AVInputFormat* iformat = av_find_input_format(format);
+    const AVInputFormat* iformat = av_find_input_format(format);
     if (iformat == NULL)
     {
         return NULL;
@@ -358,4 +360,6 @@ int free_frames(AVFrame* frames, int64_t nb_frames)
         frames++;
         //av_frame_free(&frame);
     }
+
+    return 0;
 }

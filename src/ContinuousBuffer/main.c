@@ -9,13 +9,15 @@
 
 #define FPS 30
 #define OUTPUT_BIT_RATE 96000
-ContinuousBuffer* buffer;
+
+StreamReader* desktopReader = NULL;
+StreamWriter* bufferWriter = NULL;
+
 int videoFrameCounter = 0;
-int audioFrameCounter = 0;
 
 int read_video_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
 {
-    if (cb_push_frame(buffer, frame, type) < 0)
+    if (sw_write_frames(bufferWriter, type, frame, 1) < 0)
     {
         return -1;
     }
@@ -34,29 +36,6 @@ int read_video_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
     return 0;
 }
 
-int read_audio_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
-{
-    if (type != AVMEDIA_TYPE_AUDIO)
-    {
-        return 0;
-    }
-
-    if (cb_push_frame(buffer, frame, type) < 0)
-    {
-        return -1;
-    }
-
-    audioFrameCounter += frame->nb_samples;
-
-    if (audioFrameCounter >= 44100*20)
-    {
-        // Finish file reading and exit the program
-        return -1;
-    }
-
-    return 0;
-}
-
 int main()
 {
     avdevice_register_all();
@@ -65,11 +44,11 @@ int main()
     /*StreamReader* speakerReader = sr_open_input("audio=Stereo Mix (Realtek(R) Audio)", "dshow");
     StreamWriter* audioWriter = sw_allocate_writer("C:/temp/speakers-buf.mp4", NULL);
 
-    sw_allocate_audio_stream(audioWriter, 
-        AV_CODEC_ID_AAC, 
-        speakerReader->audio_decoder->bit_rate, 
-        speakerReader->audio_decoder->sample_rate, 
-        av_get_default_channel_layout(2), 
+    sw_allocate_audio_stream(audioWriter,
+        AV_CODEC_ID_AAC,
+        speakerReader->audio_decoder->bit_rate,
+        speakerReader->audio_decoder->sample_rate,
+        av_get_default_channel_layout(2),
         AV_SAMPLE_FMT_FLTP);
 
     sw_open_writer(audioWriter);
@@ -96,24 +75,22 @@ int main()
     sr_free_reader(&speakerReader);
     sw_free_writer(&audioWriter);*/
 
-    StreamReader* desktopReader = sr_open_input("desktop", "gdigrab");
+    desktopReader = sr_open_input("desktop", "gdigrab");
+    bufferWriter = sw_allocate_writer_from_format(NULL, &continuous_buffer_muxer);
 
     AVRational time_base;
     time_base.num = 1;
     time_base.den = FPS;
-
-    buffer = cb_allocate_buffer("mp4", 5000);
-
-    cb_allocate_video_buffer(
-        buffer,
-        time_base,
+    sw_allocate_video_stream(
+        bufferWriter,
         AV_CODEC_ID_H264,
-        4000000,
+        time_base,
+        40000,
         desktopReader->video_decoder->width,
         desktopReader->video_decoder->height,
         AV_PIX_FMT_YUV420P);
 
-    cb_start(buffer);
+    sw_open_writer(bufferWriter);
 
     clock_t begin = clock();
 
@@ -123,8 +100,7 @@ int main()
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Reading time %f\n", time_spent);
 
-    cb_flush_to_file(buffer, "C:/temp/desktop-buf.mp4");
-
-    cb_free_buffer(&buffer);
+    sw_close_writer(bufferWriter);
     sr_free_reader(&desktopReader);
+    sw_free_writer(&bufferWriter);
 }

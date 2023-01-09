@@ -18,8 +18,6 @@ typedef struct ContinuousBufferStream {
 
     enum AVMediaType type;
     
-    AVCodecContext* encoder;
-
     AVFifoBuffer* queue;
     AVRational time_base;
 
@@ -35,49 +33,39 @@ typedef struct ContinuousBufferStream {
     int sample_rate;    
     int channel_layout;
     enum AVSampleFormat sample_fmt;
-    int nb_samples;
     int frame_size;
 
-    AVAudioFifo* audio;
-
+    int64_t duration;
 } ContinuousBufferStream;
 
 typedef struct ContinuousBuffer {
 
-    AVFormatContext* output;
+    int64_t duration;
 
     ContinuousBufferStream* video;
     ContinuousBufferStream* audio;
 
-    int64_t duration;
-
 } ContinuousBuffer;
 
-int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContext* inputFormat, enum AVMediaType type);
+static int cb_init(AVFormatContext* avf);
 
-ContinuousBufferStream* cb_allocate_video_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codecId, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format);
+static int cb_write_header(AVFormatContext* avf);
 
-ContinuousBufferStream* cb_allocate_audio_buffer(ContinuousBuffer* buffer, AVRational time_base, enum AVCodecID codecId, int sample_rate, int64_t bit_rate, int channel_layout,
-    enum AVSampleFormat sample_fmt, int frame_size);
+static int cb_write_trailer(AVFormatContext* avf);
 
-ContinuousBuffer* cb_allocate_buffer_from_source(AVFormatContext* inputFormat, int64_t duration);
+static int cb_write_packet(AVFormatContext* avf, AVPacket* pkt);
 
-ContinuousBufferStream* cb_allocate_stream_buffer_from_decoder(ContinuousBuffer* buffer, AVFormatContext* inputFormat, AVCodecContext* decoder, int streamIndex);
+static void cb_deinit(AVFormatContext* avf);
 
-int cb_free_buffer(ContinuousBuffer** buffer);
+#define OFFSET(x) offsetof(ContinuousBuffer, x)
+static const AVOption options[] = {
 
-int cb_push_frame(ContinuousBuffer* buffer, AVFrame* frame, enum AVMediaType type);
+        {"duration", "Buffer duration", OFFSET(duration),
+         AV_OPT_TYPE_INT64, {.i64 = 10000}, 1, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM},
 
-int cb_push_frame_to_queue(ContinuousBufferStream* buffer, AVFrame* frame, int64_t maxDuration);
+        {NULL},
+};
 
-int cb_is_empty(ContinuousBuffer* buffer);
+static const AVClass continuous_buffer_muxer_class;
 
-int64_t cb_pop_all_frames(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket** packets);
-
-ContinuousBuffer* cb_allocate_buffer(const char* format, int64_t maxDuration);
-
-int64_t cb_get_buffer_stream_duration(ContinuousBufferStream* buffer);
-
-int cb_start(ContinuousBuffer* buffer);
-
-int cb_flush_to_file(const char* file);
+const AVOutputFormat continuous_buffer_muxer;

@@ -20,7 +20,7 @@ int open_codec_context(int* streamIndex, AVCodecContext** decCtx, AVFormatContex
 
 int select_sample_rate(const AVCodec* codec);
 
-int select_channel_layout(const AVCodec* codec);
+uint64_t select_channel_layout(const AVCodec* codec);
 
 int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
     AVStream* st, AVFrame* frame, AVPacket* pkt);

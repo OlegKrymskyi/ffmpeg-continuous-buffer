@@ -21,6 +21,8 @@ typedef struct StreamWriter {
 
 StreamWriter* sw_allocate_writer(const char* output, const char* format);
 
+StreamWriter* sw_allocate_writer_from_format(const char* output, const AVOutputFormat* oformat);
+
 int sw_allocate_video_stream(StreamWriter* writer, enum AVCodecID codecId, AVRational time_base, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format);
 
 int sw_allocate_audio_stream(StreamWriter* writer, enum AVCodecID codecId, int64_t bit_rate, int sample_rate, int channel_layout, enum AVSampleFormat sample_fmt);

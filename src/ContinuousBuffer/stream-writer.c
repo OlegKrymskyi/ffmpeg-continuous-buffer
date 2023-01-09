@@ -3,24 +3,30 @@
 
 StreamWriter* sw_allocate_writer(const char* output, const char* format)
 {    
+    AVOutputFormat* oformat = av_guess_format(format, NULL, NULL);
+
+    return sw_allocate_writer(output, oformat);
+}
+
+StreamWriter* sw_allocate_writer_from_format(const char* output, const AVOutputFormat* oformat)
+{
     AVFormatContext* outputFormat;
 
     /* allocate the output media context */
-    avformat_alloc_output_context2(&outputFormat, NULL, format, output);
-    if (!outputFormat) {
-        fprintf(stderr, "Could not decode output format from file extension: using FLV.\n");
-        avformat_alloc_output_context2(&outputFormat, NULL, "flv", output);
-    }
+    avformat_alloc_output_context2(&outputFormat, oformat, NULL, output);
     if (!outputFormat)
     {
         fprintf(stderr, "Output format was not initialized.\n");
-        return -1;
+        return NULL;
     }
 
     StreamWriter* writer = av_mallocz(sizeof(StreamWriter));
 
-    writer->output = av_mallocz(strlen(output));
-    strcpy(writer->output, output);
+    if (writer->output != NULL)
+    {
+        writer->output = av_mallocz(strlen(output));
+        strcpy(writer->output, output);
+    }
 
     writer->output_context = outputFormat;
 
@@ -45,7 +51,10 @@ int sw_close_writer(StreamWriter* writer)
         av_packet_free(&pkt);
     }
 
-    av_write_trailer(w->output_context);
+    if (!(w->output_context->oformat->flags & AVFMT_NOFILE))
+    {
+        av_write_trailer(w->output_context);
+    }
 
     if (w->audio_encoder != NULL)
     {
@@ -58,11 +67,13 @@ int sw_close_writer(StreamWriter* writer)
     }
 
     if (!(w->output_context->oformat->flags & AVFMT_NOFILE))
+    {
         /* Close the output file. */
         avio_closep(&w->output_context->pb);
+    }
 
     /* free the stream */
-    avformat_free_context(w->output_context);
+    //avformat_free_context(w->output_context);
 }
 
 int sw_free_writer(StreamWriter** writer)
@@ -327,7 +338,7 @@ static int add_samples_to_fifo(AVAudioFifo* fifo,
     return 0;
 }
 
-static int sw_write_video_frames(StreamWriter* writer, AVFrame* frames, int nb_frames)
+int sw_write_video_frames(StreamWriter* writer, AVFrame* frames, int nb_frames)
 {
     AVPacket* pkt = av_packet_alloc();
     int stNum = get_stream_number(writer->output_context, AVMEDIA_TYPE_VIDEO);
@@ -401,7 +412,7 @@ static int sw_write_video_frames(StreamWriter* writer, AVFrame* frames, int nb_f
     return 0;
 }
 
-static int sw_write_audio_frames(StreamWriter* writer, AVFrame* frames, int nb_frames)
+int sw_write_audio_frames(StreamWriter* writer, AVFrame* frames, int nb_frames)
 {
     AVPacket* pkt = av_packet_alloc();
     int stNum = get_stream_number(writer->output_context, AVMEDIA_TYPE_AUDIO);
