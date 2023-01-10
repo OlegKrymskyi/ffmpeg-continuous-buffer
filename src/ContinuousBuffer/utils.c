@@ -101,18 +101,9 @@ int select_sample_rate(const AVCodec* codec)
     return best_samplerate;
 }
 
-int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
-    AVStream* st, AVFrame* frame, AVPacket* pkt)
+int write_packet(AVFormatContext* fmt_ctx, AVCodecContext* c, AVStream* st, AVPacket* pkt)
 {
-    int ret;
-
-    // send the frame to the encoder
-    ret = avcodec_send_frame(c, frame);
-    if (ret < 0) {
-        fprintf(stderr, "Error sending a frame to the encoder: %s\n",
-            av_err2str(ret));
-        exit(1);
-    }
+    int ret = 0;
 
     while (ret >= 0) {
         ret = avcodec_receive_packet(c, pkt);
@@ -139,6 +130,22 @@ int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
     }
 
     return ret == AVERROR_EOF ? 1 : 0;
+}
+
+int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
+    AVStream* st, AVFrame* frame, AVPacket* pkt)
+{
+    int ret;
+
+    // send the frame to the encoder
+    ret = avcodec_send_frame(c, frame);
+    if (ret < 0) {
+        fprintf(stderr, "Error sending a frame to the encoder: %s\n",
+            av_err2str(ret));
+        exit(1);
+    }
+
+    return write_packet(fmt_ctx, c, st, pkt);
 }
 
 int get_stream_number(AVFormatContext* fmt_ctx, enum AVMediaType type)
@@ -362,4 +369,68 @@ int free_frames(AVFrame* frames, int64_t nb_frames)
     }
 
     return 0;
+}
+
+AVCodecContext* allocate_video_stream(AVFormatContext* avf, enum AVCodecID codecId, AVRational time_base, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format)
+{
+    AVCodecContext* c = NULL;
+
+    /* find the encoder */
+    AVCodec* codec = avcodec_find_encoder(codecId);
+    if (!codec) {
+        fprintf(stderr, "Could not find encoder for '%s'\n", avcodec_get_name(codecId));
+        return NULL;
+    }
+
+    AVStream* st = avformat_new_stream(avf, NULL);
+    if (st == NULL) {
+        fprintf(stderr, "Could not allocate stream\n");
+        return NULL;
+    }
+
+    st->id = avf->nb_streams - 1;
+
+    c = avcodec_alloc_context3(codec);
+    if (!c) {
+        fprintf(stderr, "Could not allocate video codec context\n");
+        return NULL;
+    }
+
+    /* put sample parameters */
+    c->bit_rate = bit_rate;
+    /* resolution must be a multiple of two */
+    c->width = width;
+    c->height = height;
+    /* frames per second */
+    c->time_base = time_base;
+    c->framerate = (AVRational){ time_base.den, time_base.num };
+
+    st->time_base = c->time_base;
+
+    /* emit one intra frame every ten frames
+     * check frame pict_type before passing frame
+     * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
+     * then gop_size is ignored and the output of encoder
+     * will always be I frame irrespective to gop_size
+     */
+    c->gop_size = 10;
+    c->max_b_frames = 1;
+    c->pix_fmt = pixel_format;
+
+    if (codec == AV_CODEC_ID_H264)
+        av_opt_set(c->priv_data, "preset", "slow", 0);
+
+    /* open it */
+    if (avcodec_open2(c, codec, NULL) < 0) {
+        fprintf(stderr, "Could not open codec\n");
+        return NULL;
+    }
+
+    /* Some formats want stream headers to be separate. */
+    if (avf->oformat->flags & AVFMT_GLOBALHEADER)
+        c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    avcodec_parameters_from_context(st->codecpar, c);
+
+    return c;
 }

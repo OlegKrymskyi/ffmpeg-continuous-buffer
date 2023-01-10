@@ -22,6 +22,8 @@ int select_sample_rate(const AVCodec* codec);
 
 uint64_t select_channel_layout(const AVCodec* codec);
 
+int write_packet(AVFormatContext* fmt_ctx, AVCodecContext* c, AVStream* st, AVPacket* pkt);
+
 int write_frame(AVFormatContext* fmt_ctx, AVCodecContext* c,
     AVStream* st, AVFrame* frame, AVPacket* pkt);
 
@@ -38,3 +40,5 @@ int save_frame_to_file(AVFrame* frame, const char* filename, const char* codec_n
 AVDeviceInfoList* get_devices_list(const char* format);
 
 int free_frames(AVFrame* frames, int64_t nb_frames);
+
+AVCodecContext* allocate_video_stream(AVFormatContext* avf, enum AVCodecID codecId, AVRational time_base, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format);

@@ -1,5 +1,161 @@
 #include "continuous-buffer.h"
 
+int cb_pop_all_packets_internal(AVFifoBuffer* queue, AVPacket** packets)
+{
+    if (av_fifo_size(queue) == 0)
+    {
+        return 0;
+    }
+
+    int nb_pkt = av_fifo_size(queue) / sizeof(AVPacket);
+
+    packets = av_mallocz(sizeof(AVPacket) * nb_pkt);
+    av_fifo_generic_read(queue, packets, av_fifo_size(queue), NULL);
+
+    return nb_pkt;
+}
+
+int cb_pop_all_packets(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket** packets)
+{
+    if (type == AVMEDIA_TYPE_VIDEO && buffer->video != NULL)
+    {
+        int result = cb_pop_all_packets_internal(buffer->video->queue, packets);
+        buffer->video->duration = 0;
+        return result;
+    }
+    else if (type == AVMEDIA_TYPE_AUDIO && buffer->audio != NULL)
+    {
+        int result = cb_pop_all_packets_internal(buffer->audio->queue, packets);
+        buffer->video->duration = 0;
+        return result;
+    }
+
+    return -1;
+}
+
+int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output)
+{
+    AVFormatContext* outputFormat;
+
+    /* allocate the output media context */
+    avformat_alloc_output_context2(&outputFormat, NULL, "mp4", output);
+    if (!outputFormat)
+    {
+        fprintf(stderr, "Output format was not initialized.\n");
+        return -1;
+    }
+
+    AVCodecContext* video = NULL;
+    if (buffer->video != NULL)
+    {
+        video = allocate_video_stream(outputFormat, buffer->video->codec, buffer->video->time_base, buffer->video->bit_rate, buffer->video->width, buffer->video->height, buffer->video->pixel_format);
+    }
+
+    AVCodecContext* audio = NULL;
+    if (buffer->audio != NULL)
+    {
+    }
+
+    av_dump_format(outputFormat, 0, output, 1);
+
+    int ret = 0;
+    /* open the output file, if needed */
+    if (!(outputFormat->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&(outputFormat->pb), output, AVIO_FLAG_WRITE);
+        if (ret < 0) {
+            fprintf(stderr, "Could not open '%s': %s\n", output,
+                av_err2str(ret));
+            return -1;
+        }
+    }
+
+    /* Write the stream header, if any. */
+    ret = avformat_write_header(outputFormat, NULL);
+    if (ret < 0) {
+        fprintf(stderr, "Error occurred when opening output file: %s\n",
+            av_err2str(ret));
+        return -1;
+    }
+
+    int audio_idx = -1;
+    int video_idx = -1;
+
+    for (int i = 0; i < outputFormat->nb_streams; i++)
+    {
+        if (outputFormat->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) 
+        {
+            audio_idx = i;
+        }
+
+        if (outputFormat->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+        {
+            video_idx = i;
+        }
+    }
+
+    if (buffer->video != NULL)
+    {
+        AVPacket** packets = NULL;
+        int nb_packets = cb_pop_all_packets(buffer, AVMEDIA_TYPE_VIDEO, packets);
+        
+        for (int i = 0; i < nb_packets; i++) {
+            write_packet(outputFormat, video, outputFormat->streams[video_idx], packets[i]);
+            av_packet_free(&packets[i]);
+        }
+    }
+
+    if (buffer->audio != NULL)
+    {
+        AVPacket** packets = NULL;
+        int nb_packets = cb_pop_all_packets(buffer, AVMEDIA_TYPE_AUDIO, &packets);
+
+        for (int i = 0; i < nb_packets; i++) {
+            write_packet(outputFormat, video, outputFormat->streams[audio_idx], packets[i]);
+            av_packet_free(&packets[i]);
+        }
+    }
+
+    if (audio != NULL && audio_idx >= 0)
+    {
+        AVPacket* pkt = av_packet_alloc();
+        write_frame(outputFormat, audio, outputFormat->streams[audio_idx], NULL, pkt);
+        av_packet_free(&pkt);
+    }
+
+    if (video != NULL && video_idx >= 0)
+    {
+        AVPacket* pkt = av_packet_alloc();
+        write_frame(outputFormat, video, outputFormat->streams[video_idx], NULL, pkt);
+        av_packet_free(&pkt);
+    }
+
+    if (!(outputFormat->oformat->flags & AVFMT_NOFILE))
+    {
+        av_write_trailer(outputFormat);
+    }
+
+    if (audio != NULL)
+    {
+        avcodec_free_context(&audio);
+    }
+
+    if (video != NULL)
+    {
+        avcodec_free_context(&video);
+    }
+
+    if (!(outputFormat->oformat->flags & AVFMT_NOFILE))
+    {
+        /* Close the output file. */
+        avio_closep(&outputFormat->pb);
+    }
+
+    /* free the stream */
+    avformat_free_context(outputFormat);
+
+    return ret;
+}
+
 static int cb_is_empty(ContinuousBuffer* buffer) 
 {
     if (buffer->audio != NULL && av_fifo_size(buffer->audio->queue) > 0)

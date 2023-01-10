@@ -100,6 +100,8 @@ int main()
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Reading time %f\n", time_spent);
 
+    cb_write_to_mp4(bufferWriter->output_context->priv_data, "c:\\temp\\test-buff.mp4");
+
     sw_close_writer(bufferWriter);
     sr_free_reader(&desktopReader);
     sw_free_writer(&bufferWriter);

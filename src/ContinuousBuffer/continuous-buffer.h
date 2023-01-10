@@ -47,6 +47,12 @@ typedef struct ContinuousBuffer {
 
 } ContinuousBuffer;
 
+int cb_pop_all_packets_internal(AVFifoBuffer* queue, AVPacket** packets);
+
+int cb_pop_all_packets(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket** packets);
+
+int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output);
+
 static int cb_init(AVFormatContext* avf);
 
 static int cb_write_header(AVFormatContext* avf);
