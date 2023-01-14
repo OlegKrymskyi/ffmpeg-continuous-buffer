@@ -5,7 +5,7 @@ StreamWriter* sw_allocate_writer(const char* output, const char* format)
 {    
     AVOutputFormat* oformat = av_guess_format(format, NULL, NULL);
 
-    return sw_allocate_writer(output, oformat);
+    return sw_allocate_writer_from_format(output, oformat);
 }
 
 StreamWriter* sw_allocate_writer_from_format(const char* output, const AVOutputFormat* oformat)
@@ -22,7 +22,7 @@ StreamWriter* sw_allocate_writer_from_format(const char* output, const AVOutputF
 
     StreamWriter* writer = av_mallocz(sizeof(StreamWriter));
 
-    if (writer->output != NULL)
+    if (output != NULL)
     {
         writer->output = av_mallocz(strlen(output));
         strcpy(writer->output, output);

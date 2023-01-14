@@ -76,7 +76,8 @@ int main()
     sw_free_writer(&audioWriter);*/
 
     desktopReader = sr_open_input("desktop", "gdigrab");
-    bufferWriter = sw_allocate_writer_from_format(NULL, &continuous_buffer_muxer);
+    bufferWriter = sw_allocate_writer_from_format("c:\\temp\\1.mp4", &continuous_buffer_muxer);
+    //bufferWriter = sw_allocate_writer("c:\\temp\\1.mp4", "mp4");
 
     AVRational time_base;
     time_base.num = 1;
@@ -85,7 +86,7 @@ int main()
         bufferWriter,
         AV_CODEC_ID_H264,
         time_base,
-        40000,
+        6400000,
         desktopReader->video_decoder->width,
         desktopReader->video_decoder->height,
         AV_PIX_FMT_YUV420P);

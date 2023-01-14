@@ -99,9 +99,8 @@ int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output)
         int nb_packets = cb_pop_all_packets(buffer, AVMEDIA_TYPE_VIDEO, &packets);
         
         for (int i = 0; i < nb_packets; i++) {
-            write_packet(outputFormat, video, outputFormat->streams[video_idx], packets);
-            //av_packet_free(&packets[i]);
-            packets++;
+            write_packet(outputFormat, video, outputFormat->streams[video_idx], &packets[i]);
+            av_packet_free(&packets[i]);
         }
     }
 
