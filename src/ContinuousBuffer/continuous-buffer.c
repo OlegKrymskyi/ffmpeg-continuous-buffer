@@ -9,8 +9,8 @@ int cb_pop_all_packets_internal(AVFifoBuffer* queue, AVPacket** packets)
 
     int nb_pkt = av_fifo_size(queue) / sizeof(AVPacket);
 
-    packets = av_mallocz(sizeof(AVPacket) * nb_pkt);
-    av_fifo_generic_read(queue, packets, av_fifo_size(queue), NULL);
+    *packets = av_mallocz(sizeof(AVPacket) * nb_pkt);
+    av_fifo_generic_read(queue, *packets, av_fifo_size(queue), NULL);
 
     return nb_pkt;
 }
@@ -95,22 +95,23 @@ int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output)
 
     if (buffer->video != NULL)
     {
-        AVPacket** packets = NULL;
-        int nb_packets = cb_pop_all_packets(buffer, AVMEDIA_TYPE_VIDEO, packets);
+        AVPacket* packets = NULL;
+        int nb_packets = cb_pop_all_packets(buffer, AVMEDIA_TYPE_VIDEO, &packets);
         
         for (int i = 0; i < nb_packets; i++) {
-            write_packet(outputFormat, video, outputFormat->streams[video_idx], packets[i]);
-            av_packet_free(&packets[i]);
+            write_packet(outputFormat, video, outputFormat->streams[video_idx], packets);
+            //av_packet_free(&packets[i]);
+            packets++;
         }
     }
 
     if (buffer->audio != NULL)
     {
-        AVPacket** packets = NULL;
+        AVPacket* packets = NULL;
         int nb_packets = cb_pop_all_packets(buffer, AVMEDIA_TYPE_AUDIO, &packets);
 
         for (int i = 0; i < nb_packets; i++) {
-            write_packet(outputFormat, video, outputFormat->streams[audio_idx], packets[i]);
+            write_packet(outputFormat, video, outputFormat->streams[audio_idx], &packets[i]);
             av_packet_free(&packets[i]);
         }
     }
