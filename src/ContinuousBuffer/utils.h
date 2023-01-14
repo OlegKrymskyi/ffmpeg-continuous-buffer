@@ -42,3 +42,5 @@ AVDeviceInfoList* get_devices_list(const char* format);
 int free_frames(AVFrame* frames, int64_t nb_frames);
 
 AVCodecContext* allocate_video_stream(AVFormatContext* avf, enum AVCodecID codecId, AVRational time_base, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format);
+
+AVCodecContext* allocate_audio_stream(AVFormatContext* avf, enum AVCodecID codecId, int64_t bit_rate, int sample_rate, int channel_layout, enum AVSampleFormat sample_fmt);

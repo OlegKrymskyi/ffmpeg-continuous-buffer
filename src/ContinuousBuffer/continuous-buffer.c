@@ -54,6 +54,7 @@ int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output)
     AVCodecContext* audio = NULL;
     if (buffer->audio != NULL)
     {
+        audio = allocate_audio_stream(outputFormat, buffer->audio->codec, buffer->audio->bit_rate, buffer->audio->sample_rate, buffer->audio->channel_layout, buffer->audio->sample_fmt);
     }
 
     av_dump_format(outputFormat, 0, output, 1);

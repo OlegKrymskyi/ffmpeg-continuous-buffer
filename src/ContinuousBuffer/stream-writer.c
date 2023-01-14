@@ -73,7 +73,7 @@ int sw_close_writer(StreamWriter* writer)
     }
 
     /* free the stream */
-    //avformat_free_context(w->output_context);
+    avformat_free_context(w->output_context);
 }
 
 int sw_free_writer(StreamWriter** writer)

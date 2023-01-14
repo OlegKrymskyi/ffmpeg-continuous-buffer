@@ -41,43 +41,8 @@ int main()
     avdevice_register_all();
     get_devices_list("dshow");
 
-    /*StreamReader* speakerReader = sr_open_input("audio=Stereo Mix (Realtek(R) Audio)", "dshow");
-    StreamWriter* audioWriter = sw_allocate_writer("C:/temp/speakers-buf.mp4", NULL);
-
-    sw_allocate_audio_stream(audioWriter,
-        AV_CODEC_ID_AAC,
-        speakerReader->audio_decoder->bit_rate,
-        speakerReader->audio_decoder->sample_rate,
-        av_get_default_channel_layout(2),
-        AV_SAMPLE_FMT_FLTP);
-
-    sw_open_writer(audioWriter);
-
-    buffer = cb_allocate_buffer(20000);
-
-    cb_allocate_audio_buffer(
-        buffer,
-        speakerReader->audio_decoder->time_base,
-        speakerReader->audio_decoder->codec_id,
-        speakerReader->audio_decoder->sample_rate,
-        OUTPUT_BIT_RATE,
-        av_get_default_channel_layout(2),
-        speakerReader->audio_decoder->sample_fmt,
-        speakerReader->audio_decoder->frame_size);
-
-    sr_read_stream(speakerReader, read_audio_frame);
-
-    cb_flush_to_writer(buffer, audioWriter);
-
-    sw_close_writer(audioWriter);
-
-    cb_free_buffer(&buffer);
-    sr_free_reader(&speakerReader);
-    sw_free_writer(&audioWriter);*/
-
     desktopReader = sr_open_input("desktop", "gdigrab");
-    bufferWriter = sw_allocate_writer_from_format("c:\\temp\\1.mp4", &continuous_buffer_muxer);
-    //bufferWriter = sw_allocate_writer("c:\\temp\\1.mp4", "mp4");
+    bufferWriter = sw_allocate_writer_from_format(NULL, &continuous_buffer_muxer);
 
     AVRational time_base;
     time_base.num = 1;

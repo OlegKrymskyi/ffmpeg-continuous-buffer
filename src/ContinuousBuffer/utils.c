@@ -446,3 +446,60 @@ AVCodecContext* allocate_video_stream(AVFormatContext* avf, enum AVCodecID codec
 
     return c;
 }
+
+AVCodecContext* allocate_audio_stream(AVFormatContext* avf, enum AVCodecID codecId, int64_t bit_rate, int sample_rate, int channel_layout, enum AVSampleFormat sample_fmt)
+{
+    AVCodecContext* c = NULL;
+
+    /* find the encoder */
+    AVCodec* codec = avcodec_find_encoder(codecId);
+    if (!codec) {
+        fprintf(stderr, "Could not find encoder for '%s'\n", avcodec_get_name(codecId));
+        return -1;
+    }
+
+    AVStream* st = avformat_new_stream(avf, NULL);
+    if (st == NULL) {
+        fprintf(stderr, "Could not allocate stream\n");
+        return -1;
+    }
+
+    st->id = avf->nb_streams - 1;
+
+    c = avcodec_alloc_context3(codec);
+    if (!c) {
+        fprintf(stderr, "Could not allocate video codec context\n");
+        return -1;
+    }
+
+    /* put sample parameters */
+    c->bit_rate = bit_rate;
+
+    /* check that the encoder supports s16 pcm input */
+    c->sample_fmt = sample_fmt;
+    if (!check_sample_fmt(codec, c->sample_fmt)) {
+        fprintf(stderr, "Encoder does not support sample format %s",
+            av_get_sample_fmt_name(c->sample_fmt));
+        exit(1);
+    }
+
+    /* select other audio parameters supported by the encoder */
+    c->sample_rate = select_sample_rate(codec);
+    c->channel_layout = channel_layout;
+
+    /* open it */
+    if (avcodec_open2(c, codec, NULL) < 0) {
+        fprintf(stderr, "Could not open codec\n");
+        return -1;
+    }
+
+    /* Some formats want stream headers to be separate. */
+    if (avf->oformat->flags & AVFMT_GLOBALHEADER)
+        c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    st->time_base = (AVRational){ 1, c->sample_rate };
+
+    avcodec_parameters_from_context(st->codecpar, c);
+
+    return c;
+}
