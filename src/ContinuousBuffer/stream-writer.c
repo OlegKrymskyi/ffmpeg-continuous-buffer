@@ -51,10 +51,7 @@ int sw_close_writer(StreamWriter* writer)
         av_packet_free(&pkt);
     }
 
-    if (!(w->output_context->oformat->flags & AVFMT_NOFILE))
-    {
-        av_write_trailer(w->output_context);
-    }
+    av_write_trailer(w->output_context);
 
     if (w->audio_encoder != NULL)
     {
@@ -78,9 +75,7 @@ int sw_close_writer(StreamWriter* writer)
 
 int sw_free_writer(StreamWriter** writer)
 {
-    av_free(*writer);
-
-    *writer = NULL;
+    av_freep(writer);
 }
 
 int sw_allocate_video_stream(StreamWriter* writer, enum AVCodecID codecId, AVRational time_base, int64_t bit_rate, int width, int height, enum AVPixelFormat pixel_format)
@@ -208,7 +203,7 @@ int sw_allocate_audio_stream(StreamWriter* writer, enum AVCodecID codecId, int64
     return 0;
 }
 
-int sw_open_writer(StreamWriter* writer)
+int sw_open_writer(StreamWriter* writer, AVDictionary** options)
 {
     av_dump_format(writer->output_context, 0, writer->output, 1);
 
@@ -224,7 +219,7 @@ int sw_open_writer(StreamWriter* writer)
     }
 
     /* Write the stream header, if any. */
-    ret = avformat_write_header(writer->output_context, NULL);
+    ret = avformat_write_header(writer->output_context, options);
     if (ret < 0) {
         fprintf(stderr, "Error occurred when opening output file: %s\n",
             av_err2str(ret));

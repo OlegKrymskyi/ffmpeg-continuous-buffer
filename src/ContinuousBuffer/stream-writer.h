@@ -29,7 +29,7 @@ int sw_allocate_audio_stream(StreamWriter* writer, enum AVCodecID codecId, int64
 
 int sw_write_frames(StreamWriter* writer, enum AVMediaType type, AVFrame* frames, int nb_frames);
 
-int sw_open_writer(StreamWriter* writer);
+int sw_open_writer(StreamWriter* writer, AVDictionary** options);
 
 int sw_close_writer(StreamWriter* writer);
 

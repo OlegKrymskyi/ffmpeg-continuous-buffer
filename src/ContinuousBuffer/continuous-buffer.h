@@ -53,11 +53,9 @@ int cb_pop_all_packets(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket
 
 int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output);
 
+AVDictionary* cb_options(int64_t duration);
+
 static int cb_init(AVFormatContext* avf);
-
-static int cb_write_header(AVFormatContext* avf);
-
-static int cb_write_trailer(AVFormatContext* avf);
 
 static int cb_write_packet(AVFormatContext* avf, AVPacket* pkt);
 

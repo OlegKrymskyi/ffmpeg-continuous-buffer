@@ -174,9 +174,7 @@ int sr_free_reader(StreamReader** reader)
 
     avformat_close_input(&r->input_context);
 
-    av_free(r);
-
-    *reader = NULL;
+    av_freep(reader);
 
     return 0;
 }

@@ -15,19 +15,22 @@ int cb_pop_all_packets_internal(AVFifoBuffer* queue, AVPacket** packets)
     return nb_pkt;
 }
 
+int cb_pop_all_packets_from_stream(ContinuousBufferStream* stream, AVPacket** packets)
+{
+    int result = cb_pop_all_packets_internal(stream->queue, packets);
+    stream->duration = 0;
+    return result;
+}
+
 int cb_pop_all_packets(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket** packets)
 {
     if (type == AVMEDIA_TYPE_VIDEO && buffer->video != NULL)
     {
-        int result = cb_pop_all_packets_internal(buffer->video->queue, packets);
-        buffer->video->duration = 0;
-        return result;
+        return cb_pop_all_packets_from_stream(buffer->video, packets);
     }
     else if (type == AVMEDIA_TYPE_AUDIO && buffer->audio != NULL)
     {
-        int result = cb_pop_all_packets_internal(buffer->audio->queue, packets);
-        buffer->video->duration = 0;
-        return result;
+        return cb_pop_all_packets_from_stream(buffer->audio, packets);
     }
 
     return -1;
@@ -157,6 +160,14 @@ int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output)
     return ret;
 }
 
+AVDictionary* cb_options(int64_t duration)
+{
+    AVDictionary* opt = NULL;
+    av_dict_set_int(&opt, "duration", duration, 0);
+
+    return opt;
+}
+
 static int cb_is_empty(ContinuousBuffer* buffer) 
 {
     if (buffer->audio != NULL && av_fifo_size(buffer->audio->queue) > 0)
@@ -215,16 +226,6 @@ static int cb_init(AVFormatContext* avf)
     return 0;
 }
 
-static int cb_write_header(AVFormatContext* avf)
-{
-    return 0;
-}
-
-static int cb_write_trailer(AVFormatContext* avf)
-{
-    return 0;
-}
-
 static int cb_write_packet(AVFormatContext* avf, AVPacket* pkt)
 {
     if (pkt == NULL)
@@ -271,21 +272,41 @@ static int cb_write_packet(AVFormatContext* avf, AVPacket* pkt)
     return 0;
 }
 
+static void cb_deinit_stream(ContinuousBufferStream* stream)
+{
+    AVPacket* packets = NULL;
+    int nb_packets = cb_pop_all_packets_from_stream(stream, &packets);
+
+    AVPacket* ppackets = packets;
+
+    for (int i = 0; i < nb_packets; i++) {
+        av_packet_unref(packets);
+        av_packet_free_side_data(packets);
+        packets++;
+    }
+    
+    if (ppackets != NULL)
+    {
+        av_freep(&ppackets);
+    }
+
+    av_fifo_free(stream->queue);
+    //av_freep(stream);
+}
+
 static void cb_deinit(AVFormatContext* avf)
 {
-    ContinuousBuffer* b = avf->priv_data;
+    /*ContinuousBuffer* b = avf->priv_data;    
 
     if (b->audio != NULL)
     {
-        av_fifo_free(b->audio->queue);
-        av_free(b->audio);
+        cb_deinit_stream(b->audio);
     }
 
     if (b->video != NULL)
     {
-        av_fifo_free(b->video->queue);
-        av_free(b->video);
-    }
+        cb_deinit_stream(b->video);
+    }*/
 }
 
 static const AVClass continuous_buffer_muxer_class = {
@@ -300,9 +321,7 @@ const AVOutputFormat continuous_buffer_muxer = {
     .long_name = "Continuous buffer",
     .priv_data_size = sizeof(ContinuousBuffer),
     .init = cb_init,
-    .write_header = cb_write_header,
     .write_packet = cb_write_packet,
-    .write_trailer = cb_write_trailer,
     .deinit = cb_deinit,
     .priv_class = &continuous_buffer_muxer_class,
     .flags = AVFMT_NOFILE,

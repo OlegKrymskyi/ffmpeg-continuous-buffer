@@ -27,7 +27,7 @@ int read_video_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
         videoFrameCounter++;
     }
 
-    if (videoFrameCounter == 5 * FPS)
+    if (videoFrameCounter == 10 * FPS)
     {
         // Finish file reading and exit the program
         return -1;
@@ -56,7 +56,8 @@ int main()
         desktopReader->video_decoder->height,
         AV_PIX_FMT_YUV420P);
 
-    sw_open_writer(bufferWriter);
+    AVDictionary* opt = cb_options(7);
+    sw_open_writer(bufferWriter, &opt);
 
     clock_t begin = clock();
 
