@@ -44,6 +44,8 @@ int cb_write_stream_to_stream(ContinuousBufferStream* stream, AVFormatContext* f
     AVPacket* ppackets = packets;
 
     for (int i = 0; i < nb_packets; i++) {
+        packets->pts = i;
+        packets->dts = i;
         write_packet(fmt_ctx, c, st, packets);
         av_packet_unref(packets);
         av_packet_free_side_data(packets);
