@@ -36,18 +36,19 @@ StreamWriter* sw_allocate_writer_from_format(const char* output, const AVOutputF
 int sw_close_writer(StreamWriter* writer)
 {
     StreamWriter* w = writer;
+    AVFormatContext* afc = w->output_context;
 
     if (w->audio_encoder != NULL)
     {
         AVPacket* pkt = av_packet_alloc();
-        write_frame(w->output_context, w->audio_encoder, w->output_context->streams[w->audio_stream_index], NULL, pkt);
+        write_frame(afc, w->audio_encoder, afc->streams[w->audio_stream_index], NULL, pkt);
         av_packet_free(&pkt);
     }
 
     if (w->video_encoder != NULL)
     {
         AVPacket* pkt = av_packet_alloc();
-        write_frame(w->output_context, w->video_encoder, w->output_context->streams[w->video_stream_index], NULL, pkt);
+        write_frame(afc, w->video_encoder, afc->streams[w->video_stream_index], NULL, pkt);
         av_packet_free(&pkt);
     }
 

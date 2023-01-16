@@ -27,7 +27,7 @@ int read_video_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
         videoFrameCounter++;
     }
 
-    if (videoFrameCounter == 10 * FPS)
+    if (videoFrameCounter == 15 * FPS)
     {
         // Finish file reading and exit the program
         return -1;
@@ -41,7 +41,10 @@ int main()
     avdevice_register_all();
     get_devices_list("dshow");
 
-    desktopReader = sr_open_input("desktop", "gdigrab");
+    AVDictionary* gdigrab_opt = NULL;
+    av_dict_set(&gdigrab_opt, "framerate", "30", 0);
+    desktopReader = sr_open_input("desktop", "gdigrab", &gdigrab_opt);
+
     bufferWriter = sw_allocate_writer_from_format(NULL, &continuous_buffer_muxer);
 
     AVRational time_base;
@@ -56,8 +59,8 @@ int main()
         desktopReader->video_decoder->height,
         AV_PIX_FMT_YUV420P);
 
-    AVDictionary* opt = cb_options(7);
-    sw_open_writer(bufferWriter, &opt);
+    AVDictionary* cb_opt = cb_options(5000);
+    sw_open_writer(bufferWriter, &cb_opt);
 
     clock_t begin = clock();
 

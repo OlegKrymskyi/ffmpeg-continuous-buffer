@@ -36,6 +36,28 @@ int cb_pop_all_packets(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket
     return -1;
 }
 
+int cb_write_stream_to_stream(ContinuousBufferStream* stream, AVFormatContext* fmt_ctx, AVCodecContext* c, AVStream* st)
+{
+    AVPacket* packets = NULL;
+    int nb_packets = cb_pop_all_packets_from_stream(stream, &packets);
+
+    AVPacket* ppackets = packets;
+
+    for (int i = 0; i < nb_packets; i++) {
+        write_packet(fmt_ctx, c, st, packets);
+        av_packet_unref(packets);
+        av_packet_free_side_data(packets);
+        packets++;
+    }
+
+    if (ppackets != NULL)
+    {
+        av_freep(&ppackets);
+    }
+
+    return 0;
+}
+
 int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output)
 {
     AVFormatContext* outputFormat;
@@ -99,31 +121,12 @@ int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output)
 
     if (buffer->video != NULL)
     {
-        AVPacket* packets = NULL;
-        int nb_packets = cb_pop_all_packets(buffer, AVMEDIA_TYPE_VIDEO, &packets);
-        
-        for (int i = 0; i < nb_packets; i++) {
-            write_packet(outputFormat, video, outputFormat->streams[video_idx], &packets[i]);
-            av_packet_free(&packets[i]);
-        }
+        cb_write_stream_to_stream(buffer->video, outputFormat, video, outputFormat->streams[video_idx]);
     }
 
     if (buffer->audio != NULL)
     {
-        AVPacket* packets = NULL;
-        int nb_packets = cb_pop_all_packets(buffer, AVMEDIA_TYPE_AUDIO, &packets);
-
-        for (int i = 0; i < nb_packets; i++) {
-            write_packet(outputFormat, video, outputFormat->streams[audio_idx], &packets[i]);
-            av_packet_free(&packets[i]);
-        }
-    }
-
-    if (audio != NULL && audio_idx >= 0)
-    {
-        AVPacket* pkt = av_packet_alloc();
-        write_frame(outputFormat, audio, outputFormat->streams[audio_idx], NULL, pkt);
-        av_packet_free(&pkt);
+        cb_write_stream_to_stream(buffer->audio, outputFormat, audio, outputFormat->streams[audio_idx]);
     }
 
     if (video != NULL && video_idx >= 0)
@@ -133,10 +136,14 @@ int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output)
         av_packet_free(&pkt);
     }
 
-    if (!(outputFormat->oformat->flags & AVFMT_NOFILE))
+    if (audio != NULL && audio_idx >= 0)
     {
-        av_write_trailer(outputFormat);
+        AVPacket* pkt = av_packet_alloc();
+        write_frame(outputFormat, audio, outputFormat->streams[audio_idx], NULL, pkt);
+        av_packet_free(&pkt);
     }
+
+    av_write_trailer(outputFormat);
 
     if (audio != NULL)
     {
@@ -233,9 +240,9 @@ static int cb_write_packet(AVFormatContext* avf, AVPacket* pkt)
         return 0;
     }
 
-    AVPacket* clone = av_packet_clone(pkt);
-
     ContinuousBuffer* buffer = avf->priv_data;
+
+    AVPacket* clone = av_packet_clone(pkt);
 
     int s_idx = pkt->stream_index;
 
@@ -269,7 +276,7 @@ static int cb_write_packet(AVFormatContext* avf, AVPacket* pkt)
     buffer_stream->duration += clone->duration;
     av_fifo_generic_write(buffer->video->queue, clone, sizeof(AVPacket), NULL);
 
-    return 0;
+    return 1;
 }
 
 static void cb_deinit_stream(ContinuousBufferStream* stream)
@@ -291,29 +298,33 @@ static void cb_deinit_stream(ContinuousBufferStream* stream)
     }
 
     av_fifo_free(stream->queue);
-    //av_freep(stream);
+    stream->queue = NULL;
+
+    av_freep(stream);
 }
 
 static void cb_deinit(AVFormatContext* avf)
 {
-    /*ContinuousBuffer* b = avf->priv_data;    
+    ContinuousBuffer* b = avf->priv_data;    
 
     if (b->audio != NULL)
     {
         cb_deinit_stream(b->audio);
+        b->audio = NULL;
     }
 
     if (b->video != NULL)
     {
         cb_deinit_stream(b->video);
-    }*/
+        b->video = NULL;
+    }
 }
 
-static const AVClass continuous_buffer_muxer_class = {
+const AVClass continuous_buffer_muxer_class = {
     .class_name = "Continuous buffer muxer",
     .item_name = av_default_item_name,
     .option = options,
-    .version = LIBAVUTIL_VERSION_INT,
+    .version = LIBAVUTIL_VERSION_INT
 };
 
 const AVOutputFormat continuous_buffer_muxer = {
@@ -324,5 +335,5 @@ const AVOutputFormat continuous_buffer_muxer = {
     .write_packet = cb_write_packet,
     .deinit = cb_deinit,
     .priv_class = &continuous_buffer_muxer_class,
-    .flags = AVFMT_NOFILE,
+    .flags = AVFMT_NOFILE | AVFMT_NOTIMESTAMPS | AVFMT_ALLOW_FLUSH
 };

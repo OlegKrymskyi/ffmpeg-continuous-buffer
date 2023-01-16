@@ -46,17 +46,14 @@ static int decode_packet(AVCodecContext* dec, const AVPacket* pkt, AVFrame* fram
     return 0;
 }
 
-StreamReader* sr_open_stream_from_format(const char* input, AVInputFormat* format)
+StreamReader* sr_open_stream_from_format(const char* input, AVInputFormat* format, AVDictionary** opts)
 {
     StreamReader* reader = av_mallocz(sizeof(StreamReader));
 
     AVFormatContext* inputFormat = NULL;
-    /* open input file, and allocate format context */
+    /* open input file, and allocate format context */    
 
-    AVDictionary* opts = NULL;
-    av_dict_set(&opts, "framerate", "60", 0);
-
-    if (avformat_open_input(&inputFormat, input, format, &opts) < 0) {
+    if (avformat_open_input(&inputFormat, input, format, opts) < 0) {
         fprintf(stderr, "Could not find %s\n", input);
         av_free(inputFormat);
         return NULL;
@@ -91,7 +88,7 @@ StreamReader* sr_open_stream_from_format(const char* input, AVInputFormat* forma
     return reader;
 }
 
-StreamReader* sr_open_input(const char* input, const char* format)
+StreamReader* sr_open_input(const char* input, const char* format, AVDictionary** opts)
 {
     const AVInputFormat* iformat = av_find_input_format(format);
     if (iformat == NULL)
@@ -99,14 +96,14 @@ StreamReader* sr_open_input(const char* input, const char* format)
         return NULL;
     }
 
-    StreamReader* reader = sr_open_stream_from_format(input, iformat);
+    StreamReader* reader = sr_open_stream_from_format(input, iformat, opts);
 
     return reader;
 }
 
-StreamReader* sr_open_stream(const char* input)
+StreamReader* sr_open_stream(const char* input, AVDictionary** opts)
 {
-    StreamReader* reader = sr_open_stream_from_format(input, NULL);
+    StreamReader* reader = sr_open_stream_from_format(input, NULL, opts);
 
     return reader;
 }

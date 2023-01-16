@@ -39,12 +39,10 @@ typedef struct ContinuousBufferStream {
 } ContinuousBufferStream;
 
 typedef struct ContinuousBuffer {
-
-    int64_t duration;
-
     ContinuousBufferStream* video;
     ContinuousBufferStream* audio;
 
+    int64_t duration;
 } ContinuousBuffer;
 
 int cb_pop_all_packets_internal(AVFifoBuffer* queue, AVPacket** packets);
@@ -65,11 +63,11 @@ static void cb_deinit(AVFormatContext* avf);
 static const AVOption options[] = {
 
         {"duration", "Buffer duration", OFFSET(duration),
-         AV_OPT_TYPE_INT64, {.i64 = 10000}, 1, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM},
-
+         AV_OPT_TYPE_INT64, {.i64 = 10000}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM},
+        
         {NULL},
 };
 
-static const AVClass continuous_buffer_muxer_class;
+const AVClass continuous_buffer_muxer_class;
 
 const AVOutputFormat continuous_buffer_muxer;
