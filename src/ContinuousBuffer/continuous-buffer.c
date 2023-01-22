@@ -244,7 +244,14 @@ static int cb_write_packet(AVFormatContext* avf, AVPacket* pkt)
 
     ContinuousBuffer* buffer = avf->priv_data;
 
-    AVPacket* clone = av_packet_clone(pkt);
+    AVPacket* clone = av_packet_alloc();
+    av_packet_copy_props(clone, pkt);
+    av_new_packet(clone, pkt->size);
+    
+    if (pkt->size)
+        memcpy(clone->buf->data, pkt->data, pkt->size);
+
+    clone->data = clone->buf->data;
 
     int s_idx = pkt->stream_index;
 
