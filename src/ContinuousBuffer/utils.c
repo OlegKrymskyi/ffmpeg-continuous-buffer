@@ -103,6 +103,14 @@ int select_sample_rate(const AVCodec* codec)
 
 int write_packet(AVFormatContext* fmt_ctx, AVCodecContext* c, AVStream* st, AVPacket* pkt)
 {
+    /*if (!(pkt->flags & AV_PKT_FLAG_KEY))
+    {
+        printf("Write not a key packet\n");
+    }
+    else {
+        printf("Write a key packet\n");
+    }*/
+
     /* rescale output packet timestamp values from codec to stream timebase */
     av_packet_rescale_ts(pkt, c->time_base, st->time_base);
     pkt->stream_index = st->index;

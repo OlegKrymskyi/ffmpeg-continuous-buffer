@@ -39,14 +39,26 @@ int cb_pop_all_packets(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket
 int cb_write_stream_to_stream(ContinuousBufferStream* stream, AVFormatContext* fmt_ctx, AVCodecContext* c, AVStream* st)
 {
     AVPacket* packets = NULL;
-    int nb_packets = cb_pop_all_packets_from_stream(stream, &packets);
+    int nb_packets = cb_pop_all_packets_from_stream(stream, &packets);    
 
     AVPacket* ppackets = packets;
 
+    int keyFrame = 0;
     for (int i = 0; i < nb_packets; i++) {
         packets->pts = i;
         packets->dts = i;
-        write_packet(fmt_ctx, c, st, packets);
+
+        if (packets->flags & AV_PKT_FLAG_KEY)
+        {
+            keyFrame = 1;
+        }
+
+        // Video should start from the key frame. If there is no key frame yet, then packet must be skipped.
+        if (keyFrame == 1)
+        {
+            write_packet(fmt_ctx, c, st, packets);
+        }
+
         av_packet_unref(packets);
         av_packet_free_side_data(packets);
         packets++;
@@ -252,6 +264,11 @@ static int cb_write_packet(AVFormatContext* avf, AVPacket* pkt)
         memcpy(clone->buf->data, pkt->data, pkt->size);
 
     clone->data = clone->buf->data;
+    clone->flags = pkt->flags;
+
+    clone->duration = pkt->duration;
+    clone->dts = pkt->dts;
+    clone->pts = pkt->pts;
 
     int s_idx = pkt->stream_index;
 

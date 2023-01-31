@@ -30,6 +30,13 @@ int read_video_frame(AVFrame* frame, enum AVMediaType type, int64_t pts_time)
     if (videoFrameCounter == 10 * FPS)
     {
         // Finish file reading and exit the program
+        cb_write_to_mp4(bufferWriter->output_context->priv_data, "c:\\temp\\test-buff-1.mp4");
+    }
+
+    if (videoFrameCounter == 15 * FPS)
+    {
+        // Finish file reading and exit the program
+        cb_write_to_mp4(bufferWriter->output_context->priv_data, "c:\\temp\\test-buff-2.mp4");
         return -1;
     }
 
@@ -69,8 +76,6 @@ int main()
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("Reading time %f\n", time_spent);
-
-    cb_write_to_mp4(bufferWriter->output_context->priv_data, "c:\\temp\\test-buff.mp4");
 
     printf("Test time\n");
     sw_close_writer(bufferWriter);
