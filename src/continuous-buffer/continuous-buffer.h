@@ -22,6 +22,7 @@
 #pragma comment (lib, "swscale.lib")
 
 #include "utils.h"
+#include "framework.h"
 
 typedef struct ContinuousBufferStream {
 
@@ -54,13 +55,13 @@ typedef struct ContinuousBuffer {
     int64_t duration;
 } ContinuousBuffer;
 
-int cb_pop_all_packets_internal(AVFifoBuffer* queue, AVPacket** packets);
+EXPORT int cb_pop_all_packets_internal(AVFifoBuffer* queue, AVPacket** packets);
 
-int cb_pop_all_packets(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket** packets);
+EXPORT int cb_pop_all_packets(ContinuousBuffer* buffer, enum AVMediaType type, AVPacket** packets);
 
-int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output);
+EXPORT int cb_write_to_mp4(ContinuousBuffer* buffer, const char* output);
 
-AVDictionary* cb_options(int64_t duration);
+EXPORT AVDictionary* cb_options(int64_t duration);
 
 static int cb_init(AVFormatContext* avf);
 
@@ -77,6 +78,6 @@ static const AVOption options[] = {
         {NULL},
 };
 
-const AVClass continuous_buffer_muxer_class;
+EXPORT const AVClass continuous_buffer_muxer_class;
 
-const AVOutputFormat continuous_buffer_muxer;
+EXPORT const AVOutputFormat continuous_buffer_muxer;

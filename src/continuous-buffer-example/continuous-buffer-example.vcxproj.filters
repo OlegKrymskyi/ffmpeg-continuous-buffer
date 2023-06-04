@@ -18,31 +18,5 @@
     <ClCompile Include="main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="continuous-buffer.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="utils.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="stream-reader.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="stream-writer.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="continuous-buffer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="utils.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="stream-reader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="stream-writer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>
